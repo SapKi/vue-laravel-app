@@ -25,4 +25,9 @@ class Item extends Model
         'reviewed_at' => 'datetime',
         'risk_score' => 'integer',
     ];
+
+    public function notes()
+    {
+        return $this->hasMany(ItemNote::class)->orderBy('created_at', 'asc');
+    }
 }

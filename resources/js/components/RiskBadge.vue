@@ -1,31 +1,38 @@
 <template>
-  <span class="risk-wrap" @mouseenter="show = true" @mouseleave="show = false">
+  <span ref="badgeRef" class="risk-wrap" @mouseenter="open" @mouseleave="close">
     <span class="risk" :class="riskClass">
       <span class="risk-dot" :class="riskClass + '-dot'"></span>
       Risk {{ score }}
     </span>
 
-    <Transition name="pop">
-      <div v-if="show" class="popover" role="tooltip">
-        <div class="popover-arrow"></div>
-        <div class="popover-header">
-          <span class="popover-score" :class="riskClass">{{ score }}/100</span>
-          <span class="popover-label">{{ levelLabel }}</span>
-        </div>
-        <div class="popover-body">
-          <div v-if="!flagRows.length" class="popover-clean">
-            ✅ No issues detected
+    <Teleport to="body">
+      <Transition name="pop">
+        <div
+          v-if="show"
+          class="popover"
+          role="tooltip"
+          :style="popoverStyle"
+        >
+          <div class="popover-arrow"></div>
+          <div class="popover-header">
+            <span class="popover-score" :class="riskClass">{{ score }}/100</span>
+            <span class="popover-label">{{ levelLabel }}</span>
           </div>
-          <div v-for="row in flagRows" :key="row.flag" class="popover-row">
-            <span class="popover-flag-icon">{{ row.icon }}</span>
-            <div>
-              <div class="popover-flag-name">{{ row.label }}</div>
-              <div class="popover-flag-desc">{{ row.desc }}</div>
+          <div class="popover-body">
+            <div v-if="!flagRows.length" class="popover-clean">
+              ✅ No issues detected
+            </div>
+            <div v-for="row in flagRows" :key="row.flag" class="popover-row">
+              <span class="popover-flag-icon">{{ row.icon }}</span>
+              <div>
+                <div class="popover-flag-name">{{ row.label }}</div>
+                <div class="popover-flag-desc">{{ row.desc }}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </Transition>
+      </Transition>
+    </Teleport>
   </span>
 </template>
 
@@ -37,14 +44,16 @@ const props = defineProps({
   flags: { type: Array, default: () => [] },
 });
 
-const show = ref(false);
+const show      = ref(false);
+const badgeRef  = ref(null);
+const popoverStyle = ref({});
 
 const FLAG_META = {
-  spam:      { icon: '📢', label: 'Spam keywords',        desc: 'Contains known spam phrases (e.g. "buy now", "free money").' },
-  offensive: { icon: '⚠️', label: 'Offensive language',   desc: 'Contains words associated with offensive or hostile content.' },
-  caps_heavy:{ icon: '🔠', label: 'Excessive caps',        desc: 'More than 40% of letters are uppercase — common in spam.' },
-  has_urls:  { icon: '🔗', label: 'Contains URLs',         desc: 'URLs were detected in the content.' },
-  very_short:{ icon: '📏', label: 'Very short content',    desc: 'Content is unusually short (under 15 characters).' },
+  spam:      { icon: '📢', label: 'Spam keywords',      desc: 'Contains known spam phrases (e.g. "buy now", "free money").' },
+  offensive: { icon: '⚠️', label: 'Offensive language', desc: 'Contains words associated with offensive or hostile content.' },
+  caps_heavy:{ icon: '🔠', label: 'Excessive caps',      desc: 'More than 40% of letters are uppercase — common in spam.' },
+  has_urls:  { icon: '🔗', label: 'Contains URLs',       desc: 'URLs were detected in the content.' },
+  very_short:{ icon: '📏', label: 'Very short content',  desc: 'Content is unusually short (under 15 characters).' },
 };
 
 const flagRows = computed(() =>
@@ -62,6 +71,23 @@ const levelLabel = computed(() => {
   if (props.score >= 25) return 'Medium risk';
   return 'Low risk';
 });
+
+function open() {
+  if (!badgeRef.value) return;
+  const rect = badgeRef.value.getBoundingClientRect();
+  popoverStyle.value = {
+    position: 'fixed',
+    bottom: `${window.innerHeight - rect.top + 10}px`,
+    left:   `${rect.left + rect.width / 2}px`,
+    transform: 'translateX(-50%)',
+    zIndex: 9999,
+  };
+  show.value = true;
+}
+
+function close() {
+  show.value = false;
+}
 </script>
 
 <style scoped>
@@ -99,19 +125,17 @@ const levelLabel = computed(() => {
 .risk--low-dot    { background: #10b981; }
 .risk--medium-dot { background: #f59e0b; animation: pulse 1.6s infinite; }
 .risk--high-dot   { background: #ef4444; animation: pulse 1s infinite; }
+</style>
 
-/* Popover */
+<!-- Popover styles must be global (not scoped) because it's teleported to body -->
+<style>
 .popover {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
   width: 260px;
   background: #1e1b4b;
   border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
-  z-index: 300;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
   overflow: hidden;
+  pointer-events: none;
 }
 
 .popover-arrow {
@@ -149,16 +173,11 @@ const levelLabel = computed(() => {
 
 .popover-clean { font-size: 0.82rem; color: #6ee7b7; text-align: center; padding: 0.25rem 0; }
 
-.popover-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
+.popover-row { display: flex; align-items: flex-start; gap: 0.5rem; }
 .popover-flag-icon { font-size: 0.9rem; flex-shrink: 0; margin-top: 1px; }
 .popover-flag-name { font-size: 0.78rem; font-weight: 700; color: #fff; margin-bottom: 1px; }
 .popover-flag-desc { font-size: 0.72rem; color: rgba(255,255,255,0.55); line-height: 1.4; }
 
-/* Transition */
 .pop-enter-active { transition: opacity 0.15s, transform 0.15s; }
 .pop-leave-active { transition: opacity 0.1s, transform 0.1s; }
 .pop-enter-from, .pop-leave-to { opacity: 0; transform: translateX(-50%) translateY(4px); }

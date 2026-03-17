@@ -17,6 +17,8 @@ Route::get('/items', [ItemController::class, 'index']);
 Route::post('/items', [ItemController::class, 'store']);
 Route::get('/items/{item}', [ItemController::class, 'show']);
 Route::patch('/items/{item}/review', [ItemController::class, 'review']);
+Route::patch('/items/{item}/note',          [ItemController::class, 'saveNote']);
+Route::delete('/items/{item}/notes/{note}', [ItemController::class, 'destroyNote']);
 Route::delete('/items/{item}', [ItemController::class, 'destroy']);
 
 // Protected routes (requires Sanctum token)

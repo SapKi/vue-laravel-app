@@ -142,6 +142,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useItemsStore } from '@/stores/items';
+import { fetchItem } from '@/api/items';
 import StatusBadge from '@/components/StatusBadge.vue';
 import RiskBadge from '@/components/RiskBadge.vue';
 import ItemDetailModal from '@/components/ItemDetailModal.vue';
@@ -174,8 +175,8 @@ function toggleOrder() {
   store.loadItems();
 }
 
-function openModal(item) {
-  selectedItem.value = { ...item };
+async function openModal(item) {
+  selectedItem.value = await fetchItem(item.id);
 }
 
 async function handleReview({ id, status, note }) {
@@ -510,9 +511,9 @@ onMounted(() => store.loadItems());
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  border: 1.5px solid #fca5a5;
-  background: #fff0f0;
-  color: #ef4444;
+  border: 1.5px solid #e5e7eb;
+  background: #f9fafb;
+  color: #9ca3af;
   font-size: 0.8rem;
   cursor: pointer;
   display: inline-flex;
@@ -520,14 +521,12 @@ onMounted(() => store.loadItems());
   justify-content: center;
   flex-shrink: 0;
   margin-left: 4px;
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: all 0.15s;
 }
 .delete-btn:hover {
-  background: #ef4444;
-  border-color: #ef4444;
-  color: #fff;
-  transform: scale(1.1);
-  box-shadow: 0 3px 10px rgba(239, 68, 68, 0.4);
+  border-color: #fca5a5;
+  background: #fff5f5;
+  color: #ef4444;
 }
 
 /* Confirm dialog */

@@ -56,7 +56,25 @@ class ItemController extends Controller
 
     public function show(Item $item): JsonResponse
     {
-        return response()->json($item);
+        return response()->json($item->load('notes'));
+    }
+
+    public function saveNote(Request $request, Item $item): JsonResponse
+    {
+        $validated = $request->validate([
+            'note' => 'required|string|max:1000',
+        ]);
+
+        $note = $item->notes()->create(['body' => $validated['note']]);
+
+        return response()->json($note, 201);
+    }
+
+    public function destroyNote(Item $item, \App\Models\ItemNote $note): JsonResponse
+    {
+        abort_if($note->item_id !== $item->id, 404);
+        $note->delete();
+        return response()->json(null, 204);
     }
 
     public function destroy(Item $item): JsonResponse

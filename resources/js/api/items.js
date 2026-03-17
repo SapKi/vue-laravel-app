@@ -26,3 +26,12 @@ export async function reviewItem(id, payload) {
 export async function deleteItem(id) {
     await axios.delete(`${BASE}/${id}`);
 }
+
+export async function saveNote(id, note) {
+    const res = await axios.patch(`${BASE}/${id}/note`, { note });
+    return res.data;
+}
+
+export async function deleteNote(itemId, noteId) {
+    await axios.delete(`${BASE}/${itemId}/notes/${noteId}`);
+}

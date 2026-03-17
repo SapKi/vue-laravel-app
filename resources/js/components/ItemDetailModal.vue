@@ -40,10 +40,18 @@
             <p class="content-text">{{ item.content }}</p>
           </div>
 
-          <!-- Reviewer note (already reviewed) -->
-          <div v-if="item.status !== 'pending' && item.reviewer_note" class="reviewer-note">
-            <span class="reviewer-note-label">💬 Reviewer note</span>
-            <p>{{ item.reviewer_note }}</p>
+          <!-- Notes list -->
+          <div v-if="notes.length" class="notes-section">
+            <div class="notes-label">💬 Notes</div>
+            <div class="notes-list">
+              <div v-for="n in notes" :key="n.id" class="note-item">
+                <p class="note-body">{{ n.body }}</p>
+                <div class="note-footer">
+                  <span class="note-date">{{ formatDate(n.created_at) }}</span>
+                  <button class="note-delete-btn" title="Delete note" @click="handleDeleteNote(n.id)">🗑</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Already reviewed banner -->
@@ -51,15 +59,33 @@
             This item was <strong>{{ item.status }}</strong>{{ item.reviewed_at ? ' on ' + formatDate(item.reviewed_at) : '' }}.
           </div>
 
-          <!-- Review form -->
+          <!-- Note area (always visible for pending) -->
           <div v-if="item.status === 'pending'" class="review-form">
-            <label class="note-label">Leave a note <span class="optional">(optional)</span></label>
+            <label class="note-label">Note <span class="optional">(optional)</span></label>
             <textarea
               v-model="note"
               placeholder="Add context for this decision…"
               class="note-input"
               rows="3"
             />
+
+            <!-- Save note row -->
+            <div class="save-note-row">
+              <Transition name="saved">
+                <span v-if="noteSaved" class="note-saved">✓ Note saved</span>
+              </Transition>
+              <button
+                class="btn btn--save-note"
+                :disabled="submitting || !note.trim()"
+                @click="handleSaveNote"
+              >
+                <span v-if="submitting && action === 'note'" class="btn-spinner"></span>
+                {{ submitting && action === 'note' ? 'Saving…' : 'Save note' }}
+              </button>
+            </div>
+
+            <div class="divider"></div>
+
             <div v-if="error" class="form-error">⚠️ {{ error }}</div>
             <div class="action-btns">
               <button class="btn btn--approve" :disabled="submitting" @click="submit('approved')">
@@ -85,6 +111,7 @@
 import { ref } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import RiskBadge from '@/components/RiskBadge.vue';
+import { saveNote as apiSaveNote, deleteNote as apiDeleteNote } from '@/api/items';
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -92,20 +119,49 @@ const props = defineProps({
 const emit = defineEmits(['close', 'reviewed']);
 
 const note       = ref('');
+const notes      = ref(props.item.notes ?? []);
 const submitting = ref(false);
 const action     = ref('');
 const error      = ref('');
+const noteSaved  = ref(false);
 
 async function submit(status) {
   submitting.value = true;
   action.value     = status;
   error.value      = '';
   try {
-    await emit('reviewed', { id: props.item.id, status, note: note.value });
+    emit('reviewed', { id: props.item.id, status, note: note.value });
   } catch (e) {
     error.value = e.response?.data?.message ?? 'Something went wrong.';
   } finally {
     submitting.value = false;
+  }
+}
+
+async function handleSaveNote() {
+  if (!note.value.trim()) return;
+  submitting.value = true;
+  action.value     = 'note';
+  error.value      = '';
+  try {
+    const created = await apiSaveNote(props.item.id, note.value.trim());
+    notes.value.push(created);
+    note.value      = '';
+    noteSaved.value = true;
+    setTimeout(() => (noteSaved.value = false), 2500);
+  } catch (e) {
+    error.value = 'Could not save note.';
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleDeleteNote(noteId) {
+  try {
+    await apiDeleteNote(props.item.id, noteId);
+    notes.value = notes.value.filter(n => n.id !== noteId);
+  } catch {
+    error.value = 'Could not delete note.';
   }
 }
 
@@ -212,14 +268,15 @@ function formatDate(iso) {
 
 .suggestion-banner {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.6rem;
-  padding: 0.8rem 1rem;
+  padding: 0.7rem 1rem;
   border-radius: 10px;
   font-size: 0.875rem;
   margin-bottom: 1.1rem;
+  line-height: 1.4;
 }
-.suggestion-icon { font-size: 1.1rem; flex-shrink: 0; }
+.suggestion-icon { font-size: 1rem; flex-shrink: 0; line-height: 1; }
 .suggestion-banner--approve {
   background: linear-gradient(135deg, #ecfdf5, #d1fae5);
   color: #065f46;
@@ -243,6 +300,62 @@ function formatDate(iso) {
   line-height: 1.75;
   color: #374151;
   white-space: pre-wrap;
+}
+
+.notes-section {
+  margin-bottom: 1.1rem;
+}
+.notes-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.note-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #6366f1;
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+}
+.note-body {
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.55;
+  margin-bottom: 0.4rem;
+}
+.note-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.note-date { font-size: 0.72rem; color: #9ca3af; }
+.note-delete-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid #e5e7eb;
+  background: #f9fafb;
+  color: #9ca3af;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+}
+.note-delete-btn:hover {
+  border-color: #fca5a5;
+  background: #fff5f5;
+  color: #ef4444;
 }
 
 .reviewer-note {
@@ -324,7 +437,28 @@ function formatDate(iso) {
   border: 1px solid #fca5a5;
 }
 
-.action-btns { display: flex; gap: 0.75rem; }
+.save-note-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.note-saved {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #059669;
+}
+.saved-enter-active, .saved-leave-active { transition: opacity 0.3s; }
+.saved-enter-from, .saved-leave-to { opacity: 0; }
+
+.divider {
+  border: none;
+  border-top: 1px solid #e0e7ff;
+  margin-bottom: 1rem;
+}
+
+.action-btns { display: flex; gap: 0.75rem; justify-content: center; }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -339,6 +473,16 @@ function formatDate(iso) {
   font-family: inherit;
 }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+
+.btn--save-note {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1.5px solid #e5e7eb;
+  padding: 0.45rem 1rem;
+  font-size: 0.82rem;
+}
+.btn--save-note:hover:not(:disabled) { background: #e5e7eb; }
+.btn--save-note:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btn--approve {
   background: linear-gradient(135deg, #10b981, #059669);
