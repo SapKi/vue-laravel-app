@@ -1,60 +1,84 @@
 <template>
-  <div class="overlay" @click.self="$emit('close')">
-    <div class="modal" role="dialog" aria-modal="true">
+  <Teleport to="body">
+    <Transition name="modal">
+      <div class="overlay" @click.self="$emit('close')">
+        <div class="modal" role="dialog" aria-modal="true">
 
-      <!-- Header -->
-      <div class="modal-header">
-        <h2 class="modal-title">{{ item.title }}</h2>
-        <button class="close-btn" @click="$emit('close')" aria-label="Close">&times;</button>
-      </div>
+          <!-- Header -->
+          <div class="modal-header">
+            <div class="modal-header-left">
+              <div class="modal-tag">Item #{{ item.id }}</div>
+              <h2 class="modal-title">{{ item.title }}</h2>
+            </div>
+            <button class="close-btn" @click="$emit('close')" aria-label="Close">✕</button>
+          </div>
 
-      <!-- Meta row -->
-      <div class="meta-row">
-        <StatusBadge :status="item.status" />
-        <RiskBadge :score="item.risk_score" :flags="item.flags ?? []" />
-        <span class="meta-date">{{ formatDate(item.created_at) }}</span>
-      </div>
+          <!-- Meta row -->
+          <div class="meta-row">
+            <StatusBadge :status="item.status" />
+            <RiskBadge :score="item.risk_score" :flags="item.flags ?? []" />
+            <span class="meta-date">{{ formatDate(item.created_at) }}</span>
+          </div>
 
-      <!-- Flags -->
-      <div v-if="item.flags?.length" class="flags">
-        <span v-for="f in item.flags" :key="f" class="flag-chip">{{ f }}</span>
-      </div>
+          <!-- Flags -->
+          <div v-if="item.flags?.length" class="flags-row">
+            <span class="flags-label">Flags:</span>
+            <span v-for="f in item.flags" :key="f" class="flag-pill">{{ f }}</span>
+          </div>
 
-      <!-- Suggested action banner -->
-      <div v-if="item.suggested_action && item.status === 'pending'" class="suggestion" :class="`suggestion--${item.suggested_action}`">
-        Auto-suggestion: <strong>{{ item.suggested_action === 'approve' ? 'Approve' : 'Reject' }}</strong>
-        &mdash; based on content analysis.
-      </div>
+          <!-- Suggestion banner -->
+          <div v-if="item.suggested_action && item.status === 'pending'" class="suggestion-banner" :class="`suggestion-banner--${item.suggested_action}`">
+            <span class="suggestion-icon">{{ item.suggested_action === 'approve' ? '✅' : '🚨' }}</span>
+            <div>
+              <strong>Auto-suggestion: {{ item.suggested_action === 'approve' ? 'Approve' : 'Reject' }}</strong>
+              <span> — based on content analysis</span>
+            </div>
+          </div>
 
-      <!-- Content -->
-      <p class="item-content">{{ item.content }}</p>
+          <!-- Content -->
+          <div class="content-box">
+            <p class="content-text">{{ item.content }}</p>
+          </div>
 
-      <!-- Reviewer note (already reviewed) -->
-      <div v-if="item.status !== 'pending' && item.reviewer_note" class="reviewer-note">
-        <strong>Reviewer note:</strong> {{ item.reviewer_note }}
-      </div>
+          <!-- Reviewer note (already reviewed) -->
+          <div v-if="item.status !== 'pending' && item.reviewer_note" class="reviewer-note">
+            <span class="reviewer-note-label">💬 Reviewer note</span>
+            <p>{{ item.reviewer_note }}</p>
+          </div>
 
-      <!-- Review form (pending only) -->
-      <div v-if="item.status === 'pending'" class="review-form">
-        <textarea
-          v-model="note"
-          placeholder="Optional note…"
-          class="note-input"
-          rows="3"
-        />
-        <div v-if="error" class="form-error">{{ error }}</div>
-        <div class="action-btns">
-          <button class="btn btn--approve" :disabled="submitting" @click="submit('approved')">
-            {{ submitting && action === 'approved' ? 'Approving…' : 'Approve' }}
-          </button>
-          <button class="btn btn--reject" :disabled="submitting" @click="submit('rejected')">
-            {{ submitting && action === 'rejected' ? 'Rejecting…' : 'Reject' }}
-          </button>
+          <!-- Already reviewed banner -->
+          <div v-if="item.status !== 'pending'" class="reviewed-banner" :class="`reviewed-banner--${item.status}`">
+            This item was <strong>{{ item.status }}</strong>{{ item.reviewed_at ? ' on ' + formatDate(item.reviewed_at) : '' }}.
+          </div>
+
+          <!-- Review form -->
+          <div v-if="item.status === 'pending'" class="review-form">
+            <label class="note-label">Leave a note <span class="optional">(optional)</span></label>
+            <textarea
+              v-model="note"
+              placeholder="Add context for this decision…"
+              class="note-input"
+              rows="3"
+            />
+            <div v-if="error" class="form-error">⚠️ {{ error }}</div>
+            <div class="action-btns">
+              <button class="btn btn--approve" :disabled="submitting" @click="submit('approved')">
+                <span v-if="submitting && action === 'approved'" class="btn-spinner"></span>
+                <span v-else>✓</span>
+                {{ submitting && action === 'approved' ? 'Approving…' : 'Approve' }}
+              </button>
+              <button class="btn btn--reject" :disabled="submitting" @click="submit('rejected')">
+                <span v-if="submitting && action === 'rejected'" class="btn-spinner"></span>
+                <span v-else>✕</span>
+                {{ submitting && action === 'rejected' ? 'Rejecting…' : 'Reject' }}
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
-
-    </div>
-  </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
@@ -67,7 +91,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'reviewed']);
 
-const note      = ref('');
+const note       = ref('');
 const submitting = ref(false);
 const action     = ref('');
 const error      = ref('');
@@ -86,7 +110,7 @@ async function submit(status) {
 }
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 </script>
 
@@ -94,129 +118,264 @@ function formatDate(iso) {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(15, 10, 40, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 200;
   padding: 1rem;
 }
+
 .modal {
   background: #fff;
-  border-radius: 10px;
+  border-radius: 18px;
   width: 100%;
-  max-width: 640px;
+  max-width: 660px;
   max-height: 90vh;
   overflow-y: auto;
-  padding: 1.75rem;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  padding: 2rem;
+  box-shadow: 0 30px 80px rgba(79, 70, 229, 0.25), 0 0 0 1px rgba(99,102,241,0.1);
 }
+
+/* Scrollbar */
+.modal::-webkit-scrollbar { width: 6px; }
+.modal::-webkit-scrollbar-track { background: transparent; }
+.modal::-webkit-scrollbar-thumb { background: #c4b5fd; border-radius: 3px; }
+
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 1rem;
   margin-bottom: 1rem;
 }
-.modal-title {
-  font-size: 1.25rem;
+.modal-header-left { flex: 1; }
+.modal-tag {
+  font-size: 0.72rem;
   font-weight: 700;
+  color: #8b5cf6;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.3rem;
+}
+.modal-title {
+  font-size: 1.3rem;
+  font-weight: 800;
   color: #1e1b4b;
-  flex: 1;
-  margin-right: 1rem;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
 }
 .close-btn {
-  background: none;
+  background: #f3f4f6;
   border: none;
-  font-size: 1.5rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   cursor: pointer;
   color: #6b7280;
-  line-height: 1;
-  padding: 0;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
 }
-.close-btn:hover { color: #111; }
+.close-btn:hover { background: #fee2e2; color: #dc2626; }
 
 .meta-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
 }
-.meta-date { font-size: 0.8rem; color: #9ca3af; margin-left: auto; }
+.meta-date { font-size: 0.78rem; color: #9ca3af; margin-left: auto; }
 
-.flags {
+.flags-row {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin-bottom: 0.75rem;
-}
-.flag-chip {
-  font-size: 0.7rem;
-  background: #ede9fe;
-  color: #5b21b6;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-weight: 500;
-}
-
-.suggestion {
-  padding: 0.6rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
   margin-bottom: 1rem;
 }
-.suggestion--approve { background: #d1fae5; color: #065f46; }
-.suggestion--reject  { background: #fee2e2; color: #991b1b; }
+.flags-label { font-size: 0.75rem; font-weight: 600; color: #6b7280; }
+.flag-pill {
+  font-size: 0.7rem;
+  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  color: #5b21b6;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+  border: 1px solid #c4b5fd;
+}
 
-.item-content {
-  font-size: 0.95rem;
-  line-height: 1.7;
+.suggestion-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  margin-bottom: 1.1rem;
+}
+.suggestion-icon { font-size: 1.1rem; flex-shrink: 0; }
+.suggestion-banner--approve {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.suggestion-banner--reject {
+  background: linear-gradient(135deg, #fff5f5, #fee2e2);
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.content-box {
+  background: linear-gradient(135deg, #fafaff, #f5f3ff);
+  border: 1px solid #e0e7ff;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.1rem;
+}
+.content-text {
+  font-size: 0.925rem;
+  line-height: 1.75;
   color: #374151;
   white-space: pre-wrap;
-  margin-bottom: 1.25rem;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 6px;
 }
 
 .reviewer-note {
-  font-size: 0.875rem;
-  color: #4b5563;
-  background: #f3f4f6;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
   margin-bottom: 1rem;
+  border: 1px solid #e5e7eb;
+}
+.reviewer-note-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #6b7280;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.reviewer-note p { font-size: 0.9rem; color: #374151; }
+
+.reviewed-banner {
+  text-align: center;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+.reviewed-banner--approved {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+.reviewed-banner--rejected {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
-.review-form { margin-top: 0.5rem; }
+.review-form { margin-top: 1rem; }
+.note-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.optional { font-weight: 400; color: #9ca3af; text-transform: none; letter-spacing: 0; }
+
 .note-input {
   width: 100%;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
+  border: 1.5px solid #e0e7ff;
+  border-radius: 10px;
+  padding: 0.7rem 0.875rem;
   font-size: 0.9rem;
   resize: vertical;
   font-family: inherit;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
   box-sizing: border-box;
+  background: #fafaff;
+  transition: all 0.2s;
+  color: #1e1b4b;
 }
-.note-input:focus { outline: 2px solid #4f46e5; border-color: transparent; }
+.note-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
 
-.form-error { color: #dc2626; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.form-error {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+  background: #fff5f5;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #fca5a5;
+}
 
 .action-btns { display: flex; gap: 0.75rem; }
 .btn {
-  padding: 0.55rem 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.75rem;
   border: none;
-  border-radius: 6px;
-  font-weight: 600;
+  border-radius: 10px;
+  font-weight: 700;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: all 0.2s;
+  font-family: inherit;
 }
-.btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn--approve { background: #059669; color: #fff; }
-.btn--approve:hover:not(:disabled) { background: #047857; }
-.btn--reject  { background: #dc2626; color: #fff; }
-.btn--reject:hover:not(:disabled)  { background: #b91c1c; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+
+.btn--approve {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+.btn--approve:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.5);
+}
+
+.btn--reject {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+.btn--reject:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(239, 68, 68, 0.5);
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Modal transition */
+.modal-enter-active { animation: modal-in 0.25s ease-out; }
+.modal-leave-active { animation: modal-in 0.2s ease-in reverse; }
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.94) translateY(16px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
 </style>

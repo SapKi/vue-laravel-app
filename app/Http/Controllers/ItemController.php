@@ -59,6 +59,12 @@ class ItemController extends Controller
         return response()->json($item);
     }
 
+    public function destroy(Item $item): JsonResponse
+    {
+        $item->delete();
+        return response()->json(null, 204);
+    }
+
     public function review(Request $request, Item $item): JsonResponse
     {
         if ($item->status !== 'pending') {

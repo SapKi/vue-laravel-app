@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { fetchItems, reviewItem } from '@/api/items';
+import { fetchItems, reviewItem, deleteItem } from '@/api/items';
 
 export const useItemsStore = defineStore('items', () => {
     const items = ref([]);
@@ -33,5 +33,10 @@ export const useItemsStore = defineStore('items', () => {
         return updated;
     }
 
-    return { items, loading, error, filters, loadItems, submitReview };
+    async function removeItem(id) {
+        await deleteItem(id);
+        items.value = items.value.filter((i) => i.id !== id);
+    }
+
+    return { items, loading, error, filters, loadItems, submitReview, removeItem };
 });

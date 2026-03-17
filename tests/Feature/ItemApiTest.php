@@ -146,4 +146,19 @@ class ItemApiTest extends TestCase
              ->assertStatus(422)
              ->assertJsonValidationErrors(['status']);
     }
+
+    // --- DELETE /api/items/{id} ---
+
+    public function test_can_delete_an_item(): void
+    {
+        $item = Item::factory()->create();
+
+        $this->deleteJson("/api/items/{$item->id}")->assertStatus(204);
+        $this->assertDatabaseMissing('items', ['id' => $item->id]);
+    }
+
+    public function test_delete_returns_404_for_missing_item(): void
+    {
+        $this->deleteJson('/api/items/9999')->assertStatus(404);
+    }
 }

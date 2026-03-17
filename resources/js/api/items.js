@@ -22,3 +22,7 @@ export async function reviewItem(id, payload) {
     const res = await axios.patch(`${BASE}/${id}/review`, payload);
     return res.data;
 }
+
+export async function deleteItem(id) {
+    await axios.delete(`${BASE}/${id}`);
+}
