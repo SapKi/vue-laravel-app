@@ -1,59 +1,148 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Review Queue
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A full-stack content moderation app built with **Vue 3** + **Laravel 12**.
+Users submit items; reviewers approve or reject them, with automated risk scoring to assist the decision.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## How to Run
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+**Requirements:** PHP 8.3+, Composer, Node 18+, npm
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+# 1. Install dependencies
+composer install
+npm install
 
-## Learning Laravel
+# 2. Environment setup (already committed with defaults)
+cp .env.example .env      # skip if .env exists
+php artisan key:generate  # skip if APP_KEY is set
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+# 3. Run migrations (SQLite, no config needed)
+php artisan migrate
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+# 4. Start the backend (terminal 1)
+php artisan serve          # → http://127.0.0.1:8000
 
-## Laravel Sponsors
+# 5. Start the frontend (terminal 2)
+npm run dev                # → HMR server (Vite)
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Open **http://127.0.0.1:8000** in your browser.
 
-### Premium Partners
+### Run tests
+```bash
+php artisan test
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+---
 
-## Contributing
+## Key Decisions
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Data Model
 
-## Code of Conduct
+| Field | Type | Reason |
+|---|---|---|
+| `title` | string(255) | Required; short identifier for the item |
+| `content` | text | The full submission body |
+| `status` | enum(pending, approved, rejected) | Three-state lifecycle; pending is the only actionable state |
+| `risk_score` | tinyint(0–100) | Normalized score makes it sortable and comparable |
+| `flags` | JSON array | Variable number of flags without needing a pivot table |
+| `suggested_action` | enum(approve, reject, null) | Pre-computed on insert; null means "no clear signal" |
+| `reviewer_note` | text, nullable | Optional context the reviewer adds at decision time |
+| `reviewed_at` | timestamp, nullable | Audit field; null means still pending |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+A single flat table is appropriate here. There are no users or roles yet, and normalizing flags into a separate table would add complexity without benefit at this scale.
 
-## Security Vulnerabilities
+### API Design
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/items` | List items — accepts `status`, `search`, `sort`, `order` query params |
+| POST | `/api/items` | Submit a new item; moderation runs synchronously |
+| GET | `/api/items/{id}` | Fetch a single item |
+| PATCH | `/api/items/{id}/review` | Approve or reject; idempotency guard rejects double-review with 422 |
 
-## License
+Chose `PATCH /items/{id}/review` over `PUT /items/{id}` to make the intent explicit — this is a state transition, not a general update. Moderation runs on `POST /items` rather than asynchronously because the score is cheap to compute and the frontend needs it immediately to show the suggestion.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Persistence
+
+**SQLite** — already configured in the boilerplate, zero setup for the reviewer, sufficient for the scope. The database file lives at `database/database.sqlite`.
+
+**For production** I'd switch to PostgreSQL:
+- `DB_CONNECTION=pgsql` in `.env`
+- Add index on `status` and `created_at` for queue queries
+- Consider running moderation asynchronously (Laravel job) if the heuristic becomes more expensive (e.g., calling an external API)
+- Add soft deletes if audit history matters
+
+---
+
+## Moderation Heuristic
+
+`App\Services\ModerationService` computes three outputs on each submission:
+
+**Risk score (0–100)** — additive:
+- +12 per spam keyword hit (capped at 35): `buy now`, `click here`, `free money`, `prize`, etc.
+- +15 per offensive keyword hit (capped at 30): `hate`, `stupid`, `idiot`, etc.
+- +20 if >40% of letters are uppercase (caps-heavy)
+- +10 if content contains a URL
+- +5 if content is shorter than 15 characters
+
+**Flags** — array of strings explaining why the score is elevated: `spam`, `offensive`, `caps_heavy`, `has_urls`, `very_short`.
+
+**Suggested action**:
+- `reject` if score ≥ 35
+- `approve` if score = 0
+- `null` otherwise (ambiguous; reviewer decides)
+
+The threshold of 35 for reject was calibrated so that a single confident spam signal (e.g., 3 spam keywords) triggers a suggestion without false-positiving on borderline content.
+
+---
+
+## Assumptions
+
+1. No authentication — all users can submit and review. In a real system you'd separate submitter and reviewer roles.
+2. Review is a one-way transition: `pending → approved` or `pending → rejected`. Re-opening is out of scope.
+3. Items are not paginated — the full list loads at once. Fine for a demo; see tradeoffs below.
+4. The moderation heuristic is keyword-based and deterministic. No ML or external services.
+5. A single `reviewer_note` field is sufficient; no comment threads.
+
+---
+
+## Tradeoffs
+
+### What I optimized for
+- **End-to-end correctness** — the full submit → review flow works, including edge cases (double review returns 422).
+- **Clarity** — explicit state machine (`pending/approved/rejected`), a dedicated `review` endpoint, and a service class for the heuristic make the code easy to reason about and extend.
+- **Testability** — the heuristic is a pure service class, making unit tests straightforward without hitting the database.
+
+### What I intentionally didn't build
+- **Pagination** — would be the first thing to add in production. The query already supports `sort`/`order` so adding `limit`/`offset` is mechanical.
+- **Authentication** — no reviewer identity is stored. Would add Laravel Sanctum tokens and a `reviewed_by` foreign key.
+- **Optimistic UI updates** — the store updates the item in-place after the API confirms, but there's no rollback on failure.
+- **Bulk review actions** — the UI and API are item-at-a-time; bulk would require a `PATCH /api/items/bulk-review` endpoint.
+- **Frontend tests** — given the timebox I prioritized backend tests where the logic lives. The Vue components are thin wrappers over API calls.
+
+---
+
+## Testing
+
+### What was tested and why
+
+**`tests/Unit/ModerationServiceTest`** — 8 tests covering every scoring path (spam, offensive, caps, URL, short content, caps at 100, clean → approve, high risk → reject). The heuristic is the most domain-specific logic in the codebase, so unit tests here give the highest signal per line of test code.
+
+**`tests/Feature/ItemApiTest`** — 13 tests covering:
+- Happy-path submit and field structure
+- Validation rejection (missing fields, invalid status)
+- Moderation integration (spam content gets flagged, clean content gets approved)
+- List filtering by status and search
+- Single item fetch and 404
+- Approve/reject flow
+- Guard against double-review
+
+These are feature tests (full HTTP stack with `RefreshDatabase`) because they verify the whole contract the frontend relies on.
+
+### What was not tested and why
+- **Frontend components** — no Vue component tests. The components are presentational with minimal logic. The risk was low and the timebox was tight.
+- **Sort/order query params** — covered implicitly by the filter tests; explicit ordering assertions would add noise without much value.
+- **Network error handling in the UI** — the error state is rendered but not unit-tested.

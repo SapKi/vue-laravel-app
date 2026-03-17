@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ItemController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -10,6 +11,12 @@ Route::get('/hello', function () {
         'timestamp' => now()->toIso8601String(),
     ]);
 });
+
+// Review Queue
+Route::get('/items', [ItemController::class, 'index']);
+Route::post('/items', [ItemController::class, 'store']);
+Route::get('/items/{item}', [ItemController::class, 'show']);
+Route::patch('/items/{item}/review', [ItemController::class, 'review']);
 
 // Protected routes (requires Sanctum token)
 Route::middleware('auth:sanctum')->group(function () {
