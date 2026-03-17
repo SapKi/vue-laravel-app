@@ -74,6 +74,9 @@
           <span v-if="loading" class="btn-spinner"></span>
           {{ loading ? 'Submitting…' : 'Submit for review →' }}
         </button>
+        <div class="form-footer">
+          <router-link to="/" class="back-link">← Back to queue</router-link>
+        </div>
       </form>
     </div>
   </div>
@@ -135,25 +138,37 @@ function reset() {
   text-align: center;
   margin-bottom: 2rem;
 }
+.form-footer {
+  text-align: center;
+  margin-top: 1rem;
+}
+.back-link {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.back-link:hover { color: var(--primary); }
 .hero-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
 .hero-title {
   font-size: 2rem;
   font-weight: 800;
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  background: var(--primary-grad);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   letter-spacing: -0.03em;
   margin-bottom: 0.3rem;
 }
-.hero-sub { color: #9ca3af; font-size: 0.9rem; }
+.hero-sub { color: var(--text-faint); font-size: 0.9rem; }
 
 .submit-card {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 18px;
   padding: 2rem;
-  box-shadow: 0 8px 40px rgba(79, 70, 229, 0.12);
-  border: 1px solid #e0e7ff;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
   min-height: 200px;
 }
 
@@ -165,27 +180,27 @@ function reset() {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
-  color: #374151;
+  color: var(--text);
 }
 .required { color: #ef4444; }
 
 .input {
   width: 100%;
-  border: 1.5px solid #e0e7ff;
+  border: 1.5px solid var(--border);
   border-radius: 10px;
   padding: 0.65rem 0.875rem;
   font-size: 0.95rem;
   font-family: inherit;
   box-sizing: border-box;
-  background: #fafaff;
-  color: #1e1b4b;
+  background: var(--bg-input);
+  color: var(--text);
   transition: all 0.2s;
 }
 .input:focus {
   outline: none;
-  border-color: #6366f1;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  border-color: var(--border-focus);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 .input--error { border-color: #ef4444 !important; background: #fff5f5 !important; }
 .textarea { resize: vertical; min-height: 130px; }
@@ -197,7 +212,7 @@ function reset() {
   margin-top: 4px;
 }
 .field-error { font-size: 0.8rem; color: #dc2626; }
-.char-count { font-size: 0.75rem; color: #9ca3af; margin-left: auto; }
+.char-count { font-size: 0.75rem; color: var(--text-faint); margin-left: auto; }
 .char-count--near { color: #f59e0b; font-weight: 600; }
 
 .server-error {
@@ -228,20 +243,20 @@ function reset() {
 }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn--primary {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: var(--primary-grad);
   color: #fff;
-  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.45);
+  box-shadow: var(--shadow-md);
 }
 .btn--primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.6);
+  filter: brightness(1.08);
 }
 .btn--outline {
-  background: #fff;
-  color: #6366f1;
-  border: 2px solid #c4b5fd;
+  background: var(--bg-card);
+  color: var(--primary);
+  border: 2px solid var(--border-focus);
 }
-.btn--outline:hover { background: #ede9fe; }
+.btn--outline:hover { background: var(--bg-hover); }
 .btn--full { width: 100%; }
 
 .btn-spinner {
@@ -276,10 +291,10 @@ function reset() {
 .success-title {
   font-size: 1.4rem;
   font-weight: 800;
-  color: #1e1b4b;
+  color: var(--text);
   margin-bottom: 0.4rem;
 }
-.success-msg { color: #6b7280; margin-bottom: 1.5rem; }
+.success-msg { color: var(--text-muted); margin-bottom: 1.5rem; }
 .success-actions { display: flex; gap: 0.75rem; justify-content: center; }
 
 /* Transitions */

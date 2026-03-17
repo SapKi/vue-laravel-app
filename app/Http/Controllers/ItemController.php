@@ -83,6 +83,21 @@ class ItemController extends Controller
         return response()->json(null, 204);
     }
 
+    public function reopen(Item $item): JsonResponse
+    {
+        if ($item->status === 'pending') {
+            return response()->json(['message' => 'Item is already pending.'], 422);
+        }
+
+        $item->update([
+            'status'        => 'pending',
+            'reviewer_note' => null,
+            'reviewed_at'   => null,
+        ]);
+
+        return response()->json($item->load('notes'));
+    }
+
     public function review(Request $request, Item $item): JsonResponse
     {
         if ($item->status !== 'pending') {
@@ -103,6 +118,6 @@ class ItemController extends Controller
             'reviewed_at'   => now(),
         ]);
 
-        return response()->json($item);
+        return response()->json($item->load('notes'));
     }
 }

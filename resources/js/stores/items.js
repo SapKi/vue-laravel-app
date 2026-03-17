@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { fetchItems, reviewItem, deleteItem } from '@/api/items';
+import { fetchItems, deleteItem } from '@/api/items';
 
 export const useItemsStore = defineStore('items', () => {
     const items = ref([]);
@@ -26,11 +26,9 @@ export const useItemsStore = defineStore('items', () => {
         }
     }
 
-    async function submitReview(id, status, note) {
-        const updated = await reviewItem(id, { status, note });
-        const idx = items.value.findIndex((i) => i.id === id);
+    function patchItem(updated) {
+        const idx = items.value.findIndex((i) => i.id === updated.id);
         if (idx !== -1) items.value[idx] = updated;
-        return updated;
     }
 
     async function removeItem(id) {
@@ -38,5 +36,5 @@ export const useItemsStore = defineStore('items', () => {
         items.value = items.value.filter((i) => i.id !== id);
     }
 
-    return { items, loading, error, filters, loadItems, submitReview, removeItem };
+    return { items, loading, error, filters, loadItems, patchItem, removeItem };
 });

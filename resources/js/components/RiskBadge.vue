@@ -131,7 +131,7 @@ function close() {
 <style>
 .popover {
   width: 260px;
-  background: #1e1b4b;
+  background: #1e293b;
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.4);
   overflow: hidden;
@@ -145,7 +145,7 @@ function close() {
   transform: translateX(-50%) rotate(45deg);
   width: 12px;
   height: 12px;
-  background: #1e1b4b;
+  background: #1e293b;
   border-radius: 2px;
 }
 

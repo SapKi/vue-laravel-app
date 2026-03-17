@@ -35,3 +35,8 @@ export async function saveNote(id, note) {
 export async function deleteNote(itemId, noteId) {
     await axios.delete(`${BASE}/${itemId}/notes/${noteId}`);
 }
+
+export async function reopenItem(id) {
+    const res = await axios.patch(`${BASE}/${id}/reopen`);
+    return res.data;
+}

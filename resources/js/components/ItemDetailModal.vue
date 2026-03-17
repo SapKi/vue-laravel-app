@@ -56,10 +56,19 @@
 
           <!-- Already reviewed banner -->
           <div v-if="item.status !== 'pending'" class="reviewed-banner" :class="`reviewed-banner--${item.status}`">
-            This item was <strong>{{ item.status }}</strong>{{ item.reviewed_at ? ' on ' + formatDate(item.reviewed_at) : '' }}.
+            <span>This item was <strong>{{ item.status }}</strong>{{ item.reviewed_at ? ' on ' + formatDate(item.reviewed_at) : '' }}.</span>
+            <button class="reopen-btn" :disabled="reopening" @click="handleReopen">
+              <span v-if="reopening" class="btn-spinner btn-spinner--dark"></span>
+              {{ reopening ? 'Reopening…' : '↩ Reopen' }}
+            </button>
           </div>
 
-          <!-- Note area (always visible for pending) -->
+          <!-- Global error (always visible regardless of status) -->
+          <Transition name="err">
+            <div v-if="error" class="form-error">⚠️ {{ error }}</div>
+          </Transition>
+
+          <!-- Note area (only for pending) -->
           <div v-if="item.status === 'pending'" class="review-form">
             <label class="note-label">Note <span class="optional">(optional)</span></label>
             <textarea
@@ -86,7 +95,6 @@
 
             <div class="divider"></div>
 
-            <div v-if="error" class="form-error">⚠️ {{ error }}</div>
             <div class="action-btns">
               <button class="btn btn--approve" :disabled="submitting" @click="submit('approved')">
                 <span v-if="submitting && action === 'approved'" class="btn-spinner"></span>
@@ -108,31 +116,41 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import RiskBadge from '@/components/RiskBadge.vue';
-import { saveNote as apiSaveNote, deleteNote as apiDeleteNote } from '@/api/items';
+import { reviewItem, reopenItem, saveNote as apiSaveNote, deleteNote as apiDeleteNote } from '@/api/items';
 
 const props = defineProps({
   item: { type: Object, required: true },
 });
-const emit = defineEmits(['close', 'reviewed']);
+const emit = defineEmits(['close', 'reviewed', 'reopened']);
 
 const note       = ref('');
 const notes      = ref(props.item.notes ?? []);
 const submitting = ref(false);
+const reopening  = ref(false);
 const action     = ref('');
 const error      = ref('');
 const noteSaved  = ref(false);
+
+watch(() => props.item, (newItem) => {
+  notes.value = newItem.notes ?? [];
+  note.value  = '';
+  error.value = '';
+});
 
 async function submit(status) {
   submitting.value = true;
   action.value     = status;
   error.value      = '';
   try {
-    emit('reviewed', { id: props.item.id, status, note: note.value });
+    const updated = await reviewItem(props.item.id, { status, note: note.value.trim() || null });
+    emit('reviewed', updated);
   } catch (e) {
-    error.value = e.response?.data?.message ?? 'Something went wrong.';
+    const data = e.response?.data;
+    error.value = (typeof data === 'object' ? data?.message : null) ?? `Request failed (${e.response?.status ?? 'network error'})`;
+
   } finally {
     submitting.value = false;
   }
@@ -156,6 +174,20 @@ async function handleSaveNote() {
   }
 }
 
+async function handleReopen() {
+  reopening.value = true;
+  error.value = '';
+  try {
+    const updated = await reopenItem(props.item.id);
+    emit('reopened', updated);
+  } catch (e) {
+    const data = e.response?.data;
+    error.value = (typeof data === 'object' ? data?.message : null) ?? `Could not reopen (${e.response?.status ?? 'network error'})`;
+  } finally {
+    reopening.value = false;
+  }
+}
+
 async function handleDeleteNote(noteId) {
   try {
     await apiDeleteNote(props.item.id, noteId);
@@ -174,7 +206,7 @@ function formatDate(iso) {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 10, 40, 0.6);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -184,20 +216,20 @@ function formatDate(iso) {
 }
 
 .modal {
-  background: #fff;
+  background: var(--bg-card);
   border-radius: 18px;
   width: 100%;
   max-width: 660px;
   max-height: 90vh;
   overflow-y: auto;
   padding: 2rem;
-  box-shadow: 0 30px 80px rgba(79, 70, 229, 0.25), 0 0 0 1px rgba(99,102,241,0.1);
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--border);
 }
 
 /* Scrollbar */
 .modal::-webkit-scrollbar { width: 6px; }
 .modal::-webkit-scrollbar-track { background: transparent; }
-.modal::-webkit-scrollbar-thumb { background: #c4b5fd; border-radius: 3px; }
+.modal::-webkit-scrollbar-thumb { background: var(--border-focus); border-radius: 3px; }
 
 .modal-header {
   display: flex;
@@ -210,7 +242,7 @@ function formatDate(iso) {
 .modal-tag {
   font-size: 0.72rem;
   font-weight: 700;
-  color: #8b5cf6;
+  color: var(--primary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 0.3rem;
@@ -218,18 +250,18 @@ function formatDate(iso) {
 .modal-title {
   font-size: 1.3rem;
   font-weight: 800;
-  color: #1e1b4b;
+  color: var(--text);
   line-height: 1.3;
   letter-spacing: -0.02em;
 }
 .close-btn {
-  background: #f3f4f6;
-  border: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   width: 34px;
   height: 34px;
   border-radius: 8px;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.9rem;
   display: flex;
   align-items: center;
@@ -237,7 +269,7 @@ function formatDate(iso) {
   flex-shrink: 0;
   transition: all 0.15s;
 }
-.close-btn:hover { background: #fee2e2; color: #dc2626; }
+.close-btn:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
 
 .meta-row {
   display: flex;
@@ -246,7 +278,7 @@ function formatDate(iso) {
   flex-wrap: wrap;
   margin-bottom: 0.85rem;
 }
-.meta-date { font-size: 0.78rem; color: #9ca3af; margin-left: auto; }
+.meta-date { font-size: 0.78rem; color: var(--text-faint); margin-left: auto; }
 
 .flags-row {
   display: flex;
@@ -255,15 +287,15 @@ function formatDate(iso) {
   gap: 0.4rem;
   margin-bottom: 1rem;
 }
-.flags-label { font-size: 0.75rem; font-weight: 600; color: #6b7280; }
+.flags-label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
 .flag-pill {
   font-size: 0.7rem;
-  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
-  color: #5b21b6;
+  background: var(--primary-light);
+  color: var(--primary);
   padding: 2px 9px;
   border-radius: 999px;
   font-weight: 600;
-  border: 1px solid #c4b5fd;
+  border: 1px solid var(--border);
 }
 
 .suggestion-banner {
@@ -277,6 +309,7 @@ function formatDate(iso) {
   line-height: 1.4;
 }
 .suggestion-icon { font-size: 1rem; flex-shrink: 0; line-height: 1; }
+.suggestion-sub { font-weight: 400; font-size: 0.82em; opacity: 0.8; }
 .suggestion-banner--approve {
   background: linear-gradient(135deg, #ecfdf5, #d1fae5);
   color: #065f46;
@@ -289,8 +322,8 @@ function formatDate(iso) {
 }
 
 .content-box {
-  background: linear-gradient(135deg, #fafaff, #f5f3ff);
-  border: 1px solid #e0e7ff;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1rem 1.25rem;
   margin-bottom: 1.1rem;
@@ -298,7 +331,7 @@ function formatDate(iso) {
 .content-text {
   font-size: 0.925rem;
   line-height: 1.75;
-  color: #374151;
+  color: var(--text-muted);
   white-space: pre-wrap;
 }
 
@@ -308,7 +341,7 @@ function formatDate(iso) {
 .notes-label {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
@@ -319,15 +352,15 @@ function formatDate(iso) {
   gap: 0.5rem;
 }
 .note-item {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-left: 3px solid #6366f1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
   border-radius: 8px;
   padding: 0.65rem 0.9rem;
 }
 .note-body {
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--text-muted);
   line-height: 1.55;
   margin-bottom: 0.4rem;
 }
@@ -336,14 +369,14 @@ function formatDate(iso) {
   align-items: center;
   justify-content: space-between;
 }
-.note-date { font-size: 0.72rem; color: #9ca3af; }
+.note-date { font-size: 0.72rem; color: var(--text-faint); }
 .note-delete-btn {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 1.5px solid #e5e7eb;
-  background: #f9fafb;
-  color: #9ca3af;
+  border: 1.5px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-faint);
   font-size: 0.7rem;
   cursor: pointer;
   display: inline-flex;
@@ -359,25 +392,28 @@ function formatDate(iso) {
 }
 
 .reviewer-note {
-  background: #f9fafb;
+  background: var(--bg-input);
   border-radius: 10px;
   padding: 0.85rem 1rem;
   margin-bottom: 1rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
 }
 .reviewer-note-label {
   display: block;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-bottom: 0.35rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.reviewer-note p { font-size: 0.9rem; color: #374151; }
+.reviewer-note p { font-size: 0.9rem; color: var(--text-muted); }
 
 .reviewed-banner {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.7rem 1rem;
   border-radius: 10px;
   font-size: 0.875rem;
@@ -393,22 +429,49 @@ function formatDate(iso) {
   color: #991b1b;
   border: 1px solid #fca5a5;
 }
+.reopen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1.5px solid currentColor;
+  background: rgba(255,255,255,0.5);
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s;
+  color: inherit;
+  flex-shrink: 0;
+}
+.reopen-btn:hover:not(:disabled) { background: rgba(255,255,255,0.75); }
+.reopen-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-spinner--dark {
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
 
 .review-form { margin-top: 1rem; }
 .note-label {
   display: block;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #374151;
+  color: var(--text);
   margin-bottom: 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.optional { font-weight: 400; color: #9ca3af; text-transform: none; letter-spacing: 0; }
+.optional { font-weight: 400; color: var(--text-faint); text-transform: none; letter-spacing: 0; }
 
 .note-input {
   width: 100%;
-  border: 1.5px solid #e0e7ff;
+  border: 1.5px solid var(--border);
   border-radius: 10px;
   padding: 0.7rem 0.875rem;
   font-size: 0.9rem;
@@ -416,21 +479,21 @@ function formatDate(iso) {
   font-family: inherit;
   margin-bottom: 0.85rem;
   box-sizing: border-box;
-  background: #fafaff;
+  background: var(--bg-input);
   transition: all 0.2s;
-  color: #1e1b4b;
+  color: var(--text);
 }
 .note-input:focus {
   outline: none;
-  border-color: #6366f1;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  border-color: var(--border-focus);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .form-error {
   color: #dc2626;
   font-size: 0.85rem;
-  margin-bottom: 0.75rem;
+  margin: 0.75rem 0;
   background: #fff5f5;
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
@@ -451,10 +514,13 @@ function formatDate(iso) {
 }
 .saved-enter-active, .saved-leave-active { transition: opacity 0.3s; }
 .saved-enter-from, .saved-leave-to { opacity: 0; }
+.err-enter-active { transition: all 0.2s; }
+.err-leave-active { transition: all 0.15s; }
+.err-enter-from, .err-leave-to { opacity: 0; transform: translateY(-4px); }
 
 .divider {
   border: none;
-  border-top: 1px solid #e0e7ff;
+  border-top: 1px solid var(--border);
   margin-bottom: 1rem;
 }
 
@@ -475,13 +541,13 @@ function formatDate(iso) {
 .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
 
 .btn--save-note {
-  background: #f3f4f6;
-  color: #374151;
-  border: 1.5px solid #e5e7eb;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1.5px solid var(--border);
   padding: 0.45rem 1rem;
   font-size: 0.82rem;
 }
-.btn--save-note:hover:not(:disabled) { background: #e5e7eb; }
+.btn--save-note:hover:not(:disabled) { background: var(--bg-hover); }
 .btn--save-note:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btn--approve {
