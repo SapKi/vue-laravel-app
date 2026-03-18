@@ -118,9 +118,9 @@ function close() {
   flex-shrink: 0;
 }
 
-.risk--low    { background: #6ee7b7; color: #065f46; border: none; }
-.risk--medium { background: #fde68a; color: #92400e; border: none; }
-.risk--high   { background: #fca5a5; color: #7f1d1d; border: none; }
+.risk--low    { background: #d1fae5; color: #065f46; border: none; }
+.risk--medium { background: #fef9c3; color: #a16207; border: none; }
+.risk--high   { background: #fee2e2; color: #991b1b; border: none; }
 
 .risk--low-dot    { background: #059669; }
 .risk--medium-dot { background: #d97706; animation: pulse 1.6s infinite; }
@@ -163,9 +163,9 @@ function close() {
   padding: 2px 8px;
   border-radius: 6px;
 }
-.risk--low.popover-score    { background: #6ee7b7; color: #065f46; }
-.risk--medium.popover-score { background: #fde68a; color: #92400e; }
-.risk--high.popover-score   { background: #fca5a5; color: #7f1d1d; }
+.risk--low.popover-score    { background: #d1fae5; color: #065f46; }
+.risk--medium.popover-score { background: #fef9c3; color: #a16207; }
+.risk--high.popover-score   { background: #fee2e2; color: #991b1b; }
 
 .popover-label { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.6); }
 

@@ -523,13 +523,13 @@ onMounted(() => store.loadItems());
   letter-spacing: 0.02em;
 }
 .suggestion-chip--approve {
-  background: #6ee7b7;
+  background: #d1fae5;
   color: #065f46;
   border: none;
 }
 .suggestion-chip--reject {
-  background: #fca5a5;
-  color: #7f1d1d;
+  background: #fee2e2;
+  color: #991b1b;
   border: none;
 }
 
