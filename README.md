@@ -154,6 +154,23 @@ A separate notes table allows multiple free-form notes to be attached to any ite
 
 ---
 
+### Error Handling
+
+Every API response returns a structured JSON error — never a raw exception or HTML page.
+
+| Scenario | HTTP status | Response body |
+|---|---|---|
+| Missing required field | 422 | `{ "message": "...", "errors": { "field": ["..."] } }` |
+| Invalid enum value (e.g. status) | 422 | `{ "message": "...", "errors": { "status": ["..."] } }` |
+| Reviewing an already-reviewed item | 422 | `{ "message": "Item has already been reviewed." }` |
+| Reopening an already-pending item | 422 | `{ "message": "Item is already pending." }` |
+| Item not found | 404 | Laravel default JSON 404 |
+| Database write fails (`QueryException`) | 500 | `{ "message": "Failed to save item. Please try again." }` |
+
+All critical write operations (`store`, `review`, `reopen`, `saveNote`) wrap their database calls in a `try/catch (QueryException)`. This means unexpected database errors return a structured JSON 500 with a human-readable message rather than an unhandled exception. The frontend reads `response.data.message` and displays it inline to the reviewer.
+
+---
+
 ### API Endpoints
 
 All routes are under `/api` — no authentication required.

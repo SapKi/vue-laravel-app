@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Item;
 use App\Services\ModerationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -49,7 +50,11 @@ class ItemController extends Controller
 
         $analysis = $this->moderation->analyze($validated['title'], $validated['content']);
 
-        $item = Item::create(array_merge($validated, $analysis, ['status' => 'pending']));
+        try {
+            $item = Item::create(array_merge($validated, $analysis, ['status' => 'pending']));
+        } catch (QueryException $e) {
+            return response()->json(['message' => 'Failed to save item. Please try again.'], 500);
+        }
 
         return response()->json($item, 201);
     }
@@ -65,7 +70,11 @@ class ItemController extends Controller
             'note' => 'required|string|max:1000',
         ]);
 
-        $note = $item->notes()->create(['body' => $validated['note']]);
+        try {
+            $note = $item->notes()->create(['body' => $validated['note']]);
+        } catch (QueryException $e) {
+            return response()->json(['message' => 'Failed to save note. Please try again.'], 500);
+        }
 
         return response()->json($note, 201);
     }
@@ -89,11 +98,15 @@ class ItemController extends Controller
             return response()->json(['message' => 'Item is already pending.'], 422);
         }
 
-        $item->update([
-            'status'        => 'pending',
-            'reviewer_note' => null,
-            'reviewed_at'   => null,
-        ]);
+        try {
+            $item->update([
+                'status'        => 'pending',
+                'reviewer_note' => null,
+                'reviewed_at'   => null,
+            ]);
+        } catch (QueryException $e) {
+            return response()->json(['message' => 'Failed to reopen item. Please try again.'], 500);
+        }
 
         return response()->json($item->load('notes'));
     }
@@ -112,11 +125,15 @@ class ItemController extends Controller
             'note'   => 'nullable|string|max:1000',
         ]);
 
-        $item->update([
-            'status'        => $validated['status'],
-            'reviewer_note' => $validated['note'] ?? null,
-            'reviewed_at'   => now(),
-        ]);
+        try {
+            $item->update([
+                'status'        => $validated['status'],
+                'reviewer_note' => $validated['note'] ?? null,
+                'reviewed_at'   => now(),
+            ]);
+        } catch (QueryException $e) {
+            return response()->json(['message' => 'Failed to save review. Please try again.'], 500);
+        }
 
         return response()->json($item->load('notes'));
     }
