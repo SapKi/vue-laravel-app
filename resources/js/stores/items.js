@@ -6,6 +6,8 @@ export const useItemsStore = defineStore('items', () => {
     const items = ref([]);
     const loading = ref(false);
     const error = ref(null);
+    const page = ref(1);
+    const meta = ref({ total: 0, last_page: 1, per_page: 10 });
 
     const filters = ref({
         status: '',
@@ -14,16 +16,28 @@ export const useItemsStore = defineStore('items', () => {
         order: 'desc',
     });
 
-    async function loadItems() {
+    async function loadItems(p = page.value) {
         loading.value = true;
         error.value = null;
+        page.value = p;
         try {
-            items.value = await fetchItems(filters.value);
+            const res = await fetchItems({ ...filters.value, page: p });
+            items.value = res.data;
+            meta.value  = { total: res.total, last_page: res.last_page, per_page: res.per_page };
         } catch (e) {
             error.value = e.response?.data?.message ?? 'Failed to load items.';
         } finally {
             loading.value = false;
         }
+    }
+
+    function goToPage(p) {
+        if (p < 1 || p > meta.value.last_page) return;
+        loadItems(p);
+    }
+
+    function resetPage() {
+        page.value = 1;
     }
 
     function patchItem(updated) {
@@ -33,8 +47,14 @@ export const useItemsStore = defineStore('items', () => {
 
     async function removeItem(id) {
         await deleteItem(id);
-        items.value = items.value.filter((i) => i.id !== id);
+        // if last item on page > 1, go back one page
+        if (items.value.length === 1 && page.value > 1) {
+            loadItems(page.value - 1);
+        } else {
+            items.value = items.value.filter((i) => i.id !== id);
+            meta.value.total = Math.max(0, meta.value.total - 1);
+        }
     }
 
-    return { items, loading, error, filters, loadItems, patchItem, removeItem };
+    return { items, loading, error, filters, page, meta, loadItems, goToPage, resetPage, patchItem, removeItem };
 });

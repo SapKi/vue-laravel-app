@@ -35,7 +35,7 @@ class ItemController extends Controller
         $sort = in_array($request->sort, $sortable) ? $request->sort : 'created_at';
         $order = $request->order === 'asc' ? 'asc' : 'desc';
 
-        $items = $query->orderBy($sort, $order)->get();
+        $items = $query->orderBy($sort, $order)->paginate(10);
 
         return response()->json($items);
     }

@@ -4,7 +4,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">Review Queue</h1>
-        <p class="page-subtitle">{{ store.items.length }} item{{ store.items.length !== 1 ? 's' : '' }} loaded</p>
+        <p class="page-subtitle">{{ store.meta.total }} item{{ store.meta.total !== 1 ? 's' : '' }} total</p>
       </div>
       <router-link to="/submit" class="submit-btn">
         <span class="submit-btn-icon">＋</span>
@@ -36,7 +36,7 @@
             {{ tab.label }}
           </button>
         </div>
-        <select v-model="store.filters.sort" class="select" @change="store.loadItems()">
+        <select v-model="store.filters.sort" class="select" @change="store.loadItems(1)">
           <option value="created_at">📅 Date</option>
           <option value="risk_score">⚡ Risk</option>
           <option value="title">🔤 Title</option>
@@ -107,6 +107,21 @@
       </div>
     </TransitionGroup>
 
+    <!-- Pagination -->
+    <div v-if="store.meta.last_page > 1" class="pagination">
+      <button class="page-btn" :disabled="store.page === 1" @click="store.goToPage(store.page - 1)">‹</button>
+      <template v-for="p in pageRange" :key="p">
+        <span v-if="p === '...'" class="page-ellipsis">…</span>
+        <button
+          v-else
+          class="page-btn"
+          :class="{ 'page-btn--active': p === store.page }"
+          @click="store.goToPage(p)"
+        >{{ p }}</button>
+      </template>
+      <button class="page-btn" :disabled="store.page === store.meta.last_page" @click="store.goToPage(store.page + 1)">›</button>
+    </div>
+
     <!-- Modal -->
     <ItemDetailModal
       v-if="selectedItem"
@@ -141,7 +156,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useItemsStore } from '@/stores/items';
 import { fetchItem } from '@/api/items';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -163,18 +178,33 @@ const statusTabs = [
 let debounceTimer = null;
 function debouncedLoad() {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => store.loadItems(), 300);
+  debounceTimer = setTimeout(() => store.loadItems(1), 300);
 }
 
 function setStatus(value) {
   store.filters.status = value;
-  store.loadItems();
+  store.loadItems(1);
 }
 
 function toggleOrder() {
   store.filters.order = store.filters.order === 'desc' ? 'asc' : 'desc';
-  store.loadItems();
+  store.loadItems(1);
 }
+
+// build compact page range e.g. [1, '...', 4, 5, 6, '...', 12]
+const pageRange = computed(() => {
+  const total = store.meta.last_page;
+  const cur   = store.page;
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = new Set([1, total, cur, cur - 1, cur + 1].filter(p => p >= 1 && p <= total));
+  const sorted = [...pages].sort((a, b) => a - b);
+  const result = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('...');
+    result.push(sorted[i]);
+  }
+  return result;
+});
 
 async function openModal(item) {
   selectedItem.value = await fetchItem(item.id);
@@ -602,6 +632,42 @@ onMounted(() => store.loadItems());
   animation: spin 0.6s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  margin-top: 1.5rem;
+}
+.page-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 0.5rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.page-btn:hover:not(:disabled):not(.page-btn--active) {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+  color: var(--primary);
+}
+.page-btn--active {
+  background: var(--primary-grad);
+  border-color: transparent;
+  color: #fff;
+  cursor: default;
+}
+.page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.page-ellipsis { color: var(--text-faint); font-size: 0.875rem; padding: 0 0.2rem; line-height: 34px; }
 
 .modal-enter-active { animation: modal-in 0.22s ease-out; }
 .modal-leave-active { animation: modal-in 0.18s ease-in reverse; }
