@@ -36,7 +36,7 @@
             {{ tab.label }}
           </button>
         </div>
-        <select v-model="store.filters.sort" class="select" @change="store.loadItems(1)">
+        <select v-model="store.filters.sort" class="select" @change="onSortChange">
           <option value="created_at">📅 Date</option>
           <option value="risk_score">⚡ Risk</option>
           <option value="title">🔤 Title</option>
@@ -182,6 +182,13 @@ function debouncedLoad() {
 
 function setStatus(value) {
   store.filters.status = value;
+  store.loadItems(1);
+}
+
+function onSortChange() {
+  if (store.filters.sort === 'risk_score') {
+    store.filters.order = 'desc';
+  }
   store.loadItems(1);
 }
 
