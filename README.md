@@ -430,3 +430,75 @@ The `GET /api/items` endpoint paginates results server-side — the frontend nev
 | `page` | integer | `1` |
 
 Filters, search, and sort all apply before pagination — changing any filter resets to page 1.
+
+---
+
+## Extra Features
+
+The following features were added beyond the core task requirements, based on what a real moderation tool would need.
+
+### Risk badge popover
+
+Every item card shows a **Risk badge** (e.g. "Risk 85"). Hovering it opens a popover that explains exactly why the item received that score:
+
+- The numeric score out of 100
+- The risk level label (Low / Medium / High)
+- A row for each flag with an icon, name, and plain-English description (e.g. "📢 Spam keywords — Contains known spam phrases")
+
+The popover is teleported to `<body>` and positioned with `getBoundingClientRect()` so it escapes overflow clipping inside cards and modals.
+
+---
+
+### Delete item
+
+Each item card has a **trash icon** in the footer. Clicking it opens a confirmation dialog before permanently deleting the item. The dialog is teleported to `<body>` as a modal overlay so it always appears above all content. On confirmation the item is removed from the list with a fade animation and deleted from the database (`DELETE /api/items/{id}`).
+
+---
+
+### Reopen item
+
+After an item is approved or rejected, the detail modal shows a reviewed banner with a **↩ Reopen** button. Clicking it:
+
+- Calls `PATCH /api/items/{id}/reopen` on the server
+- Resets `status` back to `pending`, clears `reviewer_note` and `reviewed_at`
+- Returns the review form so the item can be approved or rejected again
+- Preserves the original moderation analysis (`risk_score`, `flags`, `suggested_action`) — the content hasn't changed so the analysis shouldn't either
+- Updates the status badge in both the modal and the queue list immediately
+
+---
+
+### Free-form notes
+
+Independent of the approve/reject decision, reviewers can attach **multiple free-form notes** to any item at any time:
+
+- Notes are stored in a separate `item_notes` table (not overloading the `reviewer_note` field)
+- Each note shows its body text, creation timestamp, and a trash icon to delete it
+- Notes survive reopen — they are a permanent record of reviewer activity
+- Adding and deleting notes are separate API calls (`PATCH /api/items/{id}/note`, `DELETE /api/items/{id}/notes/{noteId}`) with instant UI feedback
+
+---
+
+### Search, filter and sort
+
+The queue toolbar provides three ways to narrow the list — all applied server-side before pagination:
+
+- **Search** — full-text search across both `title` and `content`
+- **Status tabs** — All / Pending / Approved / Rejected
+- **Sort** — by Date, Risk score, or Title, with ascending/descending toggle
+
+Changing any filter or search term resets to page 1.
+
+---
+
+### Dark mode
+
+A toggle button in the navbar switches between light (blue) and dark themes. The preference is persisted in `localStorage` and restored on every page load. Both themes are implemented with CSS custom properties (`--bg`, `--text`, `--primary`, etc.) so all components inherit them without needing per-component overrides.
+
+---
+
+### Animated UI
+
+- **Card entrance** — items fade and slide up with a staggered delay when the list loads
+- **Modal** — scales in from slightly below centre on open, reverses on close
+- **Page transitions** — fade between queue and submit views
+- **Status accent bar** — approved cards show a green left border, rejected cards show red, giving instant visual status at a glance without reading the badge
