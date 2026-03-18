@@ -39,7 +39,6 @@
         <select v-model="store.filters.sort" class="select" @change="onSortChange">
           <option value="created_at">📅 Date</option>
           <option value="risk_score">⚡ Risk</option>
-          <option value="title">🔤 Title</option>
         </select>
         <button class="order-btn" :title="store.filters.order === 'desc' ? 'Descending' : 'Ascending'" @click="toggleOrder">
           {{ store.filters.order === 'desc' ? '↓' : '↑' }}

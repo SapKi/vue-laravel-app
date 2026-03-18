@@ -77,8 +77,8 @@ function open() {
   const rect = badgeRef.value.getBoundingClientRect();
   popoverStyle.value = {
     position: 'fixed',
-    bottom: `${window.innerHeight - rect.top + 10}px`,
-    left:   `${rect.left + rect.width / 2}px`,
+    top:  `${rect.bottom + 10}px`,
+    left: `${rect.left + rect.width / 2}px`,
     transform: 'translateX(-50%)',
     zIndex: 9999,
   };
@@ -140,7 +140,7 @@ function close() {
 
 .popover-arrow {
   position: absolute;
-  bottom: -6px;
+  top: -6px;
   left: 50%;
   transform: translateX(-50%) rotate(45deg);
   width: 12px;

@@ -32,7 +32,7 @@ class ItemController extends Controller
         }
 
         // Sort
-        $sortable = ['created_at', 'risk_score', 'title'];
+        $sortable = ['created_at', 'risk_score'];
         $sort = in_array($request->sort, $sortable) ? $request->sort : 'created_at';
         $order = $request->order === 'asc' ? 'asc' : 'desc';
 
