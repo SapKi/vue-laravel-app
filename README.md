@@ -7,13 +7,15 @@ A content moderation review queue built with **Vue 3** (frontend) and **Laravel 
 
 To run the app:
 
-
+```bash
 # Terminal 1
-php artisan serve          # → http://localhost:8000
+php artisan serve       # → http://localhost:8000  (open this in your browser)
 
 # Terminal 2
-npm run dev                # → http://localhost:3000
---- full run instructions with installations below
+npm run dev             # → Vite HMR on port 3000 (internal, do not open directly)
+```
+
+> Full setup instructions with installation steps are below.
 
 ## Ports
 
@@ -77,7 +79,7 @@ php artisan serve
 npm run dev
 ```
 
-Then open http://localhost:3000.
+Then open http://localhost:8000.
 
 ### Running Tests
 
@@ -120,6 +122,9 @@ SQLite writes are serialized (one writer at a time) and the file lives on the sa
 ---
 
 ### Data Model
+items — the main content record. Stores the submitted title/content, the status (pending / approved / rejected), and everything the moderation service computes automatically on submission: risk_score, flags (JSON array), suggested_action. Also stores reviewer decisions: reviewer_note and reviewed_at (both nullable, cleared on reopen).
+
+item_notes — a separate table for free-form notes. Multiple notes can be attached to any item at any time, independent of approve/reject decisions. Foreign key to items with cascade delete.
 
 #### `items` table
 
@@ -176,25 +181,58 @@ All routes are under `/api` — no authentication required.
 
 ---
 
-### Automated Moderation
+### Moderation Heuristic
 
-Every submitted item is analyzed by `ModerationService` before being saved. It computes a **risk score (0–100)** and a set of **flags**:
+Every item is automatically analyzed by `app/Services/ModerationService.php` the moment it is submitted — before it is saved to the database. No reviewer action is required to trigger it.
 
-| Signal | Points (cap) | Flag |
+#### What it produces
+
+Three fields are computed and stored on every item:
+
+| Field | Type | Example |
 |---|---|---|
-| Spam keywords matched (e.g. "buy now", "free money") | +12 each, max 35 | `spam` |
-| Offensive keywords matched | +15 each, max 30 | `offensive` |
+| `risk_score` | integer 0–100 | `85` |
+| `flags` | JSON array | `["spam", "caps_heavy"]` |
+| `suggested_action` | enum or null | `"reject"` |
+
+#### How the score is calculated
+
+The service runs five independent signal checks against the lowercased title + content. Each signal adds points and sets a flag:
+
+| Signal | Points (capped) | Flag |
+|---|---|---|
+| Spam keywords matched (e.g. "buy now", "free money", "guaranteed") | +12 per match, max 35 | `spam` |
+| Offensive keywords matched (e.g. "hate", "idiot", "worthless") | +15 per match, max 30 | `offensive` |
 | >40% of letters are uppercase | +20 | `caps_heavy` |
-| Content contains a URL | +10 | `has_urls` |
+| Content contains a URL (`http://` or `https://`) | +10 | `has_urls` |
 | Content is under 15 characters | +5 | `very_short` |
 
-A **suggested action** is derived from the score:
+Total score is capped at 100. Signals are independent — a single item can trigger multiple flags and accumulate points from all of them.
 
-- Score = 0 → `approve`
-- Score >= 35 → `reject`
-- Otherwise → `null` (human judgment required)
+#### How the suggested action is derived
 
-The suggestion is advisory only — reviewers can always override it. Reopening a reviewed item resets the decision while preserving the original moderation analysis.
+```
+score = 0          → suggested_action = "approve"
+score >= 35        → suggested_action = "reject"
+1 ≤ score ≤ 34    → suggested_action = null  (human judgment required)
+```
+
+The threshold of 35 was chosen so that a single strong spam signal (3+ keyword matches) is enough to trigger a reject suggestion, while borderline content (e.g. a URL alone, scoring 10) stays in the grey zone.
+
+#### Design decisions worth discussing
+
+- **Advisory only** — the suggestion never blocks submission or auto-rejects. A human reviewer always makes the final call and can override it in either direction.
+- **Keyword lists are constants in the service** — easy to extend or replace with a database-driven list without changing any other code.
+- **Per-signal caps** — spam is capped at 35 points, offensive at 30, so no single signal can dominate the score on its own. This keeps the combined signals meaningful.
+- **Flags are stored separately from the score** — the UI can show exactly *why* an item scored high, not just that it did.
+- **Moderation result is preserved on reopen** — if a reviewer reopens a rejected item, the original `risk_score`, `flags`, and `suggested_action` stay intact. The content hasn't changed, so the analysis shouldn't either.
+
+#### What could be improved for production
+
+- Replace keyword lists with a proper ML classifier or third-party moderation API (e.g. OpenAI Moderation, Perspective API)
+- Make thresholds and keyword lists configurable per-tenant from the database
+- Add a confidence score alongside the suggested action
+- Log every moderation decision for auditing and model retraining
 
 ---
 
@@ -206,3 +244,82 @@ Built with **Vue 3** (Composition API + script setup), **Pinia** for state, and 
 - **Submit view** (`/submit`) — form with client + server validation and success animation
 - **Item detail modal** — inline review, free-form notes, reopen functionality
 - **Dark mode** — toggled via button in the navbar, persisted in `localStorage`
+
+---
+
+## Assumptions
+
+- **No authentication required.** The queue is treated as an internal tool used by a trusted team. Adding auth (e.g. Laravel Sanctum) would be straightforward but was out of scope.
+- **Single reviewer role.** There is no concept of multiple reviewer permissions or assignment. Any user of the tool can approve, reject, or reopen any item.
+- **Text-only submissions.** Items contain a title and text content only — no file uploads, images, or rich formatting.
+- **A review decision is reversible.** Reviewers can reopen an approved or rejected item and re-decide. This was assumed to be necessary for correcting mistakes.
+- **Notes are independent of review decisions.** Free-form notes can be added at any time by any reviewer, and are not deleted when an item is reopened or re-reviewed.
+- **Moderation is synchronous.** The heuristic runs inline at submission time. For a high-traffic system this would move to a background job, but for this scale it is fine to block the response for a few milliseconds.
+- **Pagination is server-side.** The frontend does not load all items at once — the backend paginates and the frontend requests pages as needed.
+
+---
+
+## Tradeoffs
+
+### What we optimized for
+
+- **Reviewer experience.** The UI prioritises making decisions fast — risk badge popovers explain *why* an item was flagged without leaving the queue, the modal shows all context inline, and the approve/reject flow is one click.
+- **Zero infrastructure setup.** SQLite means the app runs with `php artisan serve` and `npm run dev` and nothing else. No Docker, no database server, no environment variables beyond the defaults.
+- **Code clarity over cleverness.** The controller is thin (validation → service → model → response). The moderation service is a single class with no dependencies. The data model maps directly to what the UI needs — no transformation layer required.
+- **Testability.** The moderation logic is isolated in a service class with no framework dependencies, making it trivially unit-testable. API behaviour is tested end-to-end with a real in-memory SQLite database.
+
+### What we intentionally didn't build
+
+- **Authentication and authorisation** — would be the first thing to add in production (Laravel Sanctum for API tokens, or session-based auth for a web-only tool).
+- **Real-time updates** — the queue does not auto-refresh when another reviewer acts on an item. WebSockets (Laravel Echo + Reverb) would solve this.
+- **Bulk actions** — approving or rejecting multiple items at once. Useful for high-volume queues but adds UI complexity.
+- **Audit log** — no history of who reviewed what and when beyond `reviewed_at`. A proper audit trail would record every status transition with a timestamp and reviewer identity.
+- **Rate limiting on submission** — the `POST /api/items` endpoint is unprotected. In production it would need rate limiting to prevent spam flooding the queue.
+- **Soft deletes** — deleted items are permanently removed. Soft deletes (`deleted_at`) would allow recovery and audit.
+- **ML-based moderation** — the heuristic is keyword-based and easy to bypass. A real classifier (or a third-party API like Perspective or OpenAI Moderation) would be far more accurate.
+
+---
+
+## Testing
+
+Run the full test suite with:
+```bash
+php artisan test
+```
+
+### What was tested and why
+
+**Unit tests** — `tests/Unit/ModerationServiceTest.php` (8 tests)
+
+The moderation service is the only piece of non-trivial business logic in the backend. It has no framework dependencies, so it can be tested with plain PHPUnit — no database, no HTTP. Each signal is tested in isolation:
+
+| Test | What it verifies |
+|---|---|
+| Clean content → score 0, suggested approve | Happy path — legitimate content passes cleanly |
+| Spam keywords → spam flag + elevated score | Core spam detection works |
+| Offensive keywords → offensive flag | Offensive detection works |
+| >40% caps → caps_heavy flag | Caps heuristic threshold is correct |
+| URL in content → has_urls flag | URL regex matches correctly |
+| Very short content → very_short flag | Length threshold is correct |
+| High score → suggested reject | The threshold of 35 triggers a reject suggestion |
+| Score capped at 100 | Multiple signals cannot overflow the scale |
+
+**Feature tests** — `tests/Feature/ItemApiTest.php` (15 tests)
+
+These hit the full HTTP stack against a fresh in-memory SQLite database (`RefreshDatabase`), testing the API exactly as the frontend calls it:
+
+| Area | Tests |
+|---|---|
+| Submit | Valid submission returns 201 with correct structure; missing fields return 422; spam content is flagged; clean content gets approve suggestion |
+| List | Returns all items; filters by status; searches by title |
+| Show | Returns single item; returns 404 for missing ID |
+| Review | Approve with note; reject without note; double-review returns 422; invalid status returns 422 |
+| Delete | Deletes item and returns 204; missing ID returns 404 |
+
+### What was not tested and why
+
+- **Frontend components** — no Vue component tests (Vitest/Vue Test Utils) were set up. Within the timebox, end-to-end manual testing in the browser covered the UI behaviour.
+- **Reopen endpoint** — the reopen flow is tested manually but not in the automated suite. It would follow the same pattern as the review tests.
+- **Notes endpoints** — `PATCH /note` and `DELETE /notes/{id}` are not in the automated suite for the same reason.
+- **Pagination** — the list endpoint paginates at 10 items but the pagination behaviour (correct page counts, boundary conditions) is not explicitly tested.
+- **Concurrent writes** — SQLite serialises writes, so concurrency is not tested. With PostgreSQL in production, this would warrant dedicated tests.
