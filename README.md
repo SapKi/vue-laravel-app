@@ -91,18 +91,31 @@ php artisan test
 
 ### Persistence: SQLite
 
-The app uses **SQLite** (file: `database/database.sqlite`), chosen because it requires zero infrastructure setup — no database server to run. The file is created automatically on first migration.
+The app uses **SQLite** (file: `database/database.sqlite`), chosen because it requires zero infrastructure setup — no database server, no credentials, nothing to install beyond PHP itself. The file is created automatically on first migration.
 
-**For production:** change `.env` to use Postgres or MySQL:
+**Why not in-memory?** Laravel is a traditional request/response framework where every HTTP request boots a fresh PHP process. An in-memory store (a static array or class variable) would be wiped on every request — nothing would survive between calls. SQLite gives full relational persistence with the same zero-setup convenience.
+
+**How it works in the code:**
+- Two migrations define the schema (`items` + `item_notes` tables)
+- Two Eloquent models (`Item`, `ItemNote`) map rows to PHP objects with typed casts (`flags` → array, `reviewed_at` → datetime, `risk_score` → integer)
+- Controllers use standard Eloquent (`Item::create()`, `$item->update()`, `$item->load('notes')`) — no raw SQL anywhere
+
+**One SQLite quirk worked around:** SQLite does not echo back column default values after an `INSERT`. So `status: 'pending'` is passed explicitly in `Item::create()` instead of relying on the database default — otherwise the API response would have `status: null` on new submissions.
+
+**For production:** swap to Postgres or MySQL by changing `.env` only:
 ```
 DB_CONNECTION=pgsql
-DB_HOST=...
+DB_HOST=your-host
 DB_PORT=5432
-DB_DATABASE=...
-DB_USERNAME=...
-DB_PASSWORD=...
+DB_DATABASE=your-db
+DB_USERNAME=your-user
+DB_PASSWORD=your-pass
 ```
-No application code changes needed — the ORM layer is identical.
+No application code changes needed — Eloquent is database-agnostic and the same models, migrations, and controllers run identically on any supported engine.
+
+**What is better for production — PostgreSQL.**
+
+SQLite writes are serialized (one writer at a time) and the file lives on the same server as the app, making it unsuitable once you have concurrent traffic or multiple app instances. PostgreSQL handles thousands of concurrent connections, supports row-level locking, has mature replication and backup tooling, and is the standard choice for Laravel applications in production. MySQL is a reasonable alternative but PostgreSQL is generally preferred for new projects due to stronger standards compliance, better JSON support, and superior handling of complex queries.
 
 ---
 
