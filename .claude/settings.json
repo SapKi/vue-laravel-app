@@ -5,7 +5,8 @@
       "Read(//c/Users/sapir/.claude/projects/c--Users-sapir-vue-laravel-app/**)",
       "Bash(curl -s http://127.0.0.1:8000/api/items)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''{len\\(d\\)} items, first: {d[0][\"\"title\"\"][:40]}, risk={d[0][\"\"risk_score\"\"]}, flags={d[0][\"\"flags\"\"]}''''\\)\")",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(\"c:\\\\Users\\\\sapir\\\\vue-laravel-app\\\\README.md\":*)"
     ]
   }
 }

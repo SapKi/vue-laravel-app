@@ -1,148 +1,184 @@
 # Review Queue
 
-A full-stack content moderation app built with **Vue 3** + **Laravel 12**.
-Users submit items; reviewers approve or reject them, with automated risk scoring to assist the decision.
+A content moderation review queue built with **Vue 3** (frontend) and **Laravel 12** (backend API).
 
 ---
 
-## How to Run
+## Ports
 
-**Requirements:** PHP 8.3+, Composer, Node 18+, npm
+| Service | Port | URL |
+|---|---|---|
+| Frontend (Vite dev server) | **3000** | http://localhost:3000 |
+| Backend (Laravel) | **8000** | http://localhost:8000 |
+
+The frontend proxies all `/api/*` requests to the backend — no CORS configuration needed in development.
+
+---
+
+## Running the App
+
+### Prerequisites
+
+- PHP 8.2+
+- Composer
+- Node.js 18+
+
+### 1. Install dependencies
 
 ```bash
-# 1. Install dependencies
 composer install
 npm install
-
-# 2. Environment setup (already committed with defaults)
-cp .env.example .env      # skip if .env exists
-php artisan key:generate  # skip if APP_KEY is set
-
-# 3. Run migrations (SQLite, no config needed)
-php artisan migrate
-
-# 4. Start the backend (terminal 1)
-php artisan serve          # → http://127.0.0.1:8000
-
-# 5. Start the frontend (terminal 2)
-npm run dev                # → HMR server (Vite)
 ```
 
-Open **http://127.0.0.1:8000** in your browser.
+### 2. Set up environment
 
-### Run tests
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+Make sure these are set in `.env`:
+
+```
+DB_CONNECTION=sqlite
+SESSION_DRIVER=file
+```
+
+### 3. Run migrations and seed
+
+```bash
+php artisan migrate
+# Optional: seed with sample items
+php artisan db:seed
+```
+
+### 4. Start both servers
+
+Open two terminals:
+
+**Terminal 1 — Backend (port 8000):**
+```bash
+php artisan serve
+```
+
+**Terminal 2 — Frontend (port 3000):**
+```bash
+npm run dev
+```
+
+Then open http://localhost:3000.
+
+### Running Tests
+
 ```bash
 php artisan test
 ```
 
 ---
 
-## Key Decisions
+## Backend Implementation
+
+### Persistence: SQLite
+
+The app uses **SQLite** (file: `database/database.sqlite`), chosen because it requires zero infrastructure setup — no database server to run. The file is created automatically on first migration.
+
+**For production:** change `.env` to use Postgres or MySQL:
+```
+DB_CONNECTION=pgsql
+DB_HOST=...
+DB_PORT=5432
+DB_DATABASE=...
+DB_USERNAME=...
+DB_PASSWORD=...
+```
+No application code changes needed — the ORM layer is identical.
+
+---
 
 ### Data Model
 
-| Field | Type | Reason |
+#### `items` table
+
+| Column | Type | Description |
 |---|---|---|
-| `title` | string(255) | Required; short identifier for the item |
-| `content` | text | The full submission body |
-| `status` | enum(pending, approved, rejected) | Three-state lifecycle; pending is the only actionable state |
-| `risk_score` | tinyint(0–100) | Normalized score makes it sortable and comparable |
-| `flags` | JSON array | Variable number of flags without needing a pivot table |
-| `suggested_action` | enum(approve, reject, null) | Pre-computed on insert; null means "no clear signal" |
-| `reviewer_note` | text, nullable | Optional context the reviewer adds at decision time |
-| `reviewed_at` | timestamp, nullable | Audit field; null means still pending |
+| `id` | integer PK | Auto-increment |
+| `title` | string | Required |
+| `content` | text | Required |
+| `status` | enum | `pending` / `approved` / `rejected` — default `pending` |
+| `risk_score` | tinyint (0–100) | Computed by moderation service on submission |
+| `flags` | JSON | Array of signal names, e.g. `["spam", "caps_heavy"]` |
+| `suggested_action` | enum (nullable) | `approve` / `reject` / `null` — computed on submission |
+| `reviewer_note` | text (nullable) | Note attached at review time |
+| `reviewed_at` | timestamp (nullable) | Set on approve/reject, cleared on reopen |
+| `created_at / updated_at` | timestamps | Automatic |
 
-A single flat table is appropriate here. There are no users or roles yet, and normalizing flags into a separate table would add complexity without benefit at this scale.
+#### `item_notes` table
 
-### API Design
+A separate notes table allows multiple free-form notes to be attached to any item at any time, independently of the review decision.
 
-| Method | Endpoint | Purpose |
+| Column | Type | Description |
 |---|---|---|
-| GET | `/api/items` | List items — accepts `status`, `search`, `sort`, `order` query params |
-| POST | `/api/items` | Submit a new item; moderation runs synchronously |
-| GET | `/api/items/{id}` | Fetch a single item |
-| PATCH | `/api/items/{id}/review` | Approve or reject; idempotency guard rejects double-review with 422 |
-
-Chose `PATCH /items/{id}/review` over `PUT /items/{id}` to make the intent explicit — this is a state transition, not a general update. Moderation runs on `POST /items` rather than asynchronously because the score is cheap to compute and the frontend needs it immediately to show the suggestion.
-
-### Persistence
-
-**SQLite** — already configured in the boilerplate, zero setup for the reviewer, sufficient for the scope. The database file lives at `database/database.sqlite`.
-
-**For production** I'd switch to PostgreSQL:
-- `DB_CONNECTION=pgsql` in `.env`
-- Add index on `status` and `created_at` for queue queries
-- Consider running moderation asynchronously (Laravel job) if the heuristic becomes more expensive (e.g., calling an external API)
-- Add soft deletes if audit history matters
+| `id` | integer PK | Auto-increment |
+| `item_id` | FK → items | Cascade delete |
+| `body` | text | Note content |
+| `created_at / updated_at` | timestamps | Automatic |
 
 ---
 
-## Moderation Heuristic
+### API Endpoints
 
-`App\Services\ModerationService` computes three outputs on each submission:
+All routes are under `/api` — no authentication required.
 
-**Risk score (0–100)** — additive:
-- +12 per spam keyword hit (capped at 35): `buy now`, `click here`, `free money`, `prize`, etc.
-- +15 per offensive keyword hit (capped at 30): `hate`, `stupid`, `idiot`, etc.
-- +20 if >40% of letters are uppercase (caps-heavy)
-- +10 if content contains a URL
-- +5 if content is shorter than 15 characters
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/items` | List items with filtering, search, sort, pagination |
+| `POST` | `/api/items` | Submit a new item — moderation runs automatically |
+| `GET` | `/api/items/{id}` | Get a single item with its notes |
+| `PATCH` | `/api/items/{id}/review` | Approve or reject a pending item |
+| `PATCH` | `/api/items/{id}/reopen` | Reopen a reviewed item (reset to pending) |
+| `PATCH` | `/api/items/{id}/note` | Add a free-form note to an item |
+| `DELETE` | `/api/items/{id}/notes/{noteId}` | Delete a specific note |
+| `DELETE` | `/api/items/{id}` | Delete an item entirely |
 
-**Flags** — array of strings explaining why the score is elevated: `spam`, `offensive`, `caps_heavy`, `has_urls`, `very_short`.
+#### `GET /api/items` — query parameters
 
-**Suggested action**:
-- `reject` if score ≥ 35
-- `approve` if score = 0
-- `null` otherwise (ambiguous; reviewer decides)
-
-The threshold of 35 for reject was calibrated so that a single confident spam signal (e.g., 3 spam keywords) triggers a suggestion without false-positiving on borderline content.
-
----
-
-## Assumptions
-
-1. No authentication — all users can submit and review. In a real system you'd separate submitter and reviewer roles.
-2. Review is a one-way transition: `pending → approved` or `pending → rejected`. Re-opening is out of scope.
-3. Items are not paginated — the full list loads at once. Fine for a demo; see tradeoffs below.
-4. The moderation heuristic is keyword-based and deterministic. No ML or external services.
-5. A single `reviewer_note` field is sufficient; no comment threads.
+| Parameter | Values | Default |
+|---|---|---|
+| `status` | `pending` / `approved` / `rejected` | all |
+| `search` | string | — |
+| `sort` | `created_at` / `risk_score` / `title` | `created_at` |
+| `order` | `asc` / `desc` | `desc` |
+| `page` | integer | `1` (10 items per page) |
 
 ---
 
-## Tradeoffs
+### Automated Moderation
 
-### What I optimized for
-- **End-to-end correctness** — the full submit → review flow works, including edge cases (double review returns 422).
-- **Clarity** — explicit state machine (`pending/approved/rejected`), a dedicated `review` endpoint, and a service class for the heuristic make the code easy to reason about and extend.
-- **Testability** — the heuristic is a pure service class, making unit tests straightforward without hitting the database.
+Every submitted item is analyzed by `ModerationService` before being saved. It computes a **risk score (0–100)** and a set of **flags**:
 
-### What I intentionally didn't build
-- **Pagination** — would be the first thing to add in production. The query already supports `sort`/`order` so adding `limit`/`offset` is mechanical.
-- **Authentication** — no reviewer identity is stored. Would add Laravel Sanctum tokens and a `reviewed_by` foreign key.
-- **Optimistic UI updates** — the store updates the item in-place after the API confirms, but there's no rollback on failure.
-- **Bulk review actions** — the UI and API are item-at-a-time; bulk would require a `PATCH /api/items/bulk-review` endpoint.
-- **Frontend tests** — given the timebox I prioritized backend tests where the logic lives. The Vue components are thin wrappers over API calls.
+| Signal | Points (cap) | Flag |
+|---|---|---|
+| Spam keywords matched (e.g. "buy now", "free money") | +12 each, max 35 | `spam` |
+| Offensive keywords matched | +15 each, max 30 | `offensive` |
+| >40% of letters are uppercase | +20 | `caps_heavy` |
+| Content contains a URL | +10 | `has_urls` |
+| Content is under 15 characters | +5 | `very_short` |
+
+A **suggested action** is derived from the score:
+
+- Score = 0 → `approve`
+- Score >= 35 → `reject`
+- Otherwise → `null` (human judgment required)
+
+The suggestion is advisory only — reviewers can always override it. Reopening a reviewed item resets the decision while preserving the original moderation analysis.
 
 ---
 
-## Testing
+## Frontend
 
-### What was tested and why
+Built with **Vue 3** (Composition API + script setup), **Pinia** for state, and **Vue Router**.
 
-**`tests/Unit/ModerationServiceTest`** — 8 tests covering every scoring path (spam, offensive, caps, URL, short content, caps at 100, clean → approve, high risk → reject). The heuristic is the most domain-specific logic in the codebase, so unit tests here give the highest signal per line of test code.
-
-**`tests/Feature/ItemApiTest`** — 13 tests covering:
-- Happy-path submit and field structure
-- Validation rejection (missing fields, invalid status)
-- Moderation integration (spam content gets flagged, clean content gets approved)
-- List filtering by status and search
-- Single item fetch and 404
-- Approve/reject flow
-- Guard against double-review
-
-These are feature tests (full HTTP stack with `RefreshDatabase`) because they verify the whole contract the frontend relies on.
-
-### What was not tested and why
-- **Frontend components** — no Vue component tests. The components are presentational with minimal logic. The risk was low and the timebox was tight.
-- **Sort/order query params** — covered implicitly by the filter tests; explicit ordering assertions would add noise without much value.
-- **Network error handling in the UI** — the error state is rendered but not unit-tested.
+- **Queue view** (`/`) — paginated list with status tabs, search, sort, and risk badge popovers
+- **Submit view** (`/submit`) — form with client + server validation and success animation
+- **Item detail modal** — inline review, free-form notes, reopen functionality
+- **Dark mode** — toggled via button in the navbar, persisted in `localStorage`
