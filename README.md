@@ -173,28 +173,22 @@ All critical write operations (`store`, `review`, `reopen`, `saveNote`) wrap the
 
 ### API Endpoints
 
-All routes are under `/api` — no authentication required.
+All item routes require authentication (`auth:sanctum`). Auth routes are public.
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/items` | List items with filtering, search, sort, pagination |
-| `POST` | `/api/items` | Submit a new item — moderation runs automatically |
-| `GET` | `/api/items/{id}` | Get a single item with its notes |
-| `PATCH` | `/api/items/{id}/review` | Approve or reject a pending item |
-| `PATCH` | `/api/items/{id}/reopen` | Reopen a reviewed item (reset to pending) |
-| `PATCH` | `/api/items/{id}/note` | Add a free-form note to an item |
-| `DELETE` | `/api/items/{id}/notes/{noteId}` | Delete a specific note |
-| `DELETE` | `/api/items/{id}` | Delete an item entirely |
-
-#### `GET /api/items` — query parameters
-
-| Parameter | Values | Default |
-|---|---|---|
-| `status` | `pending` / `approved` / `rejected` | all |
-| `search` | string | — |
-| `sort` | `created_at` / `risk_score` / `title` | `created_at` |
-| `order` | `asc` / `desc` | `desc` |
-| `page` | integer | `1` (10 items per page) |
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/register` | No | Register a new user |
+| `POST` | `/api/login` | No | Sign in |
+| `POST` | `/api/logout` | Yes | Sign out |
+| `GET` | `/api/me` | Yes | Current user |
+| `GET` | `/api/items` | Yes | List items with filtering, search, sort, pagination |
+| `POST` | `/api/items` | Yes | Submit a new item — moderation runs automatically |
+| `GET` | `/api/items/{id}` | Yes | Get a single item with its notes |
+| `PATCH` | `/api/items/{id}/review` | Yes | Approve or reject a pending item |
+| `PATCH` | `/api/items/{id}/reopen` | Yes | Reopen a reviewed item (reset to pending) |
+| `PATCH` | `/api/items/{id}/note` | Yes | Add a free-form note to an item |
+| `DELETE` | `/api/items/{id}/notes/{noteId}` | Yes | Delete a specific note |
+| `DELETE` | `/api/items/{id}` | Yes | Delete an item entirely |
 
 ---
 
@@ -266,7 +260,7 @@ Built with **Vue 3** (Composition API + script setup), **Pinia** for state, and 
 
 ## Assumptions
 
-- **No authentication required.** The queue is treated as an internal tool used by a trusted team. Adding auth (e.g. Laravel Sanctum) would be straightforward but was out of scope.
+- **Session-based authentication via Laravel Sanctum.** All queue routes are protected. Users register or sign in before accessing the app. A default seeded account (`test@example.com` / `password`) is provided for convenience.
 - **Single reviewer role.** There is no concept of multiple reviewer permissions or assignment. Any user of the tool can approve, reject, or reopen any item.
 - **Text-only submissions.** Items contain a title and text content only — no file uploads, images, or rich formatting.
 - **A review decision is reversible.** Reviewers can reopen an approved or rejected item and re-decide. This was assumed to be necessary for correcting mistakes.
@@ -287,7 +281,7 @@ Built with **Vue 3** (Composition API + script setup), **Pinia** for state, and 
 
 ### What we intentionally didn't build
 
-- **Authentication and authorisation** — would be the first thing to add in production (Laravel Sanctum for API tokens, or session-based auth for a web-only tool).
+- **Role-based authorisation** — all authenticated users have identical permissions. A production system would distinguish between submitters and reviewers, and restrict approve/reject to reviewer accounts only.
 - **Real-time updates** — the queue does not auto-refresh when another reviewer acts on an item. WebSockets (Laravel Echo + Reverb) would solve this.
 - **Bulk actions** — approving or rejecting multiple items at once. Useful for high-volume queues but adds UI complexity.
 - **Audit log** — no history of who reviewed what and when beyond `reviewed_at`. A proper audit trail would record every status transition with a timestamp and reviewer identity.
@@ -340,3 +334,99 @@ These hit the full HTTP stack against a fresh in-memory SQLite database (`Refres
 - **Notes endpoints** — `PATCH /note` and `DELETE /notes/{id}` are not in the automated suite for the same reason.
 - **Pagination** — the list endpoint paginates at 10 items but the pagination behaviour (correct page counts, boundary conditions) is not explicitly tested.
 - **Concurrent writes** — SQLite serialises writes, so concurrency is not tested. With PostgreSQL in production, this would warrant dedicated tests.
+
+---
+
+## Authentication
+
+The app uses **Laravel Sanctum** with cookie-based SPA authentication — no API tokens or Authorization headers needed.
+
+#### How it works
+
+1. The frontend calls `GET /sanctum/csrf-cookie` to get an XSRF token
+2. Axios sends that token automatically on every subsequent request via the `X-XSRF-TOKEN` header
+3. On login, Laravel creates a server-side session and sets a session cookie
+4. All protected API requests are authenticated by that cookie — the browser handles it transparently
+
+#### Auth endpoints
+
+| Method | Endpoint | Auth required | Description |
+|---|---|---|---|
+| `POST` | `/api/register` | No | Create a new account (name, email, password) |
+| `POST` | `/api/login` | No | Sign in with email + password |
+| `POST` | `/api/logout` | Yes | Invalidate the session |
+| `GET` | `/api/me` | Yes | Return the currently authenticated user |
+
+#### Registration
+
+- **Name** — required
+- **Email** — required, must be unique
+- **Password** — required, minimum 8 characters
+
+On successful registration the user is immediately logged in and redirected to the queue — no separate email verification step.
+
+#### Login
+
+- Wrong credentials → 422 with `{ "errors": { "email": ["The provided credentials are incorrect."] } }`
+- Correct credentials → session created, user object returned
+
+#### Frontend flow
+
+- On first page load the Vue router guard calls `GET /api/me` to check if a session exists
+- If no session → redirect to `/login`
+- If session exists → proceed to the requested route
+- Login page shows a **Sign in / Sign up** toggle — same page, no separate route
+- Logout clears the session on the server and redirects to `/login` regardless of server response
+
+#### Default account (seeded)
+
+```
+Email:    test@example.com
+Password: password
+```
+
+#### `.env` requirements for Sanctum SPA auth
+
+```
+APP_URL=http://localhost:8000
+SANCTUM_STATEFUL_DOMAINS=localhost:8000
+SESSION_DRIVER=file
+```
+
+---
+
+## Pagination
+
+The `GET /api/items` endpoint paginates results server-side — the frontend never loads all items at once.
+
+#### How it works
+
+- **Page size:** 10 items per page (fixed)
+- **Backend:** Laravel's `paginate(10)` returns a standard paginated response
+- **Frontend:** the Pinia store tracks `currentPage` and `totalPages`, the queue view renders numbered page buttons
+
+#### Paginated response format
+
+```json
+{
+  "data": [ ...10 items... ],
+  "current_page": 1,
+  "last_page": 4,
+  "per_page": 10,
+  "total": 38,
+  "from": 1,
+  "to": 10
+}
+```
+
+#### Query parameters
+
+| Parameter | Values | Default |
+|---|---|---|
+| `status` | `pending` / `approved` / `rejected` | all |
+| `search` | string | — |
+| `sort` | `created_at` / `risk_score` / `title` | `created_at` |
+| `order` | `asc` / `desc` | `desc` |
+| `page` | integer | `1` |
+
+Filters, search, and sort all apply before pagination — changing any filter resets to page 1.

@@ -3,7 +3,8 @@
     <nav class="navbar">
       <router-link to="/" class="nav-brand">Review Queue</router-link>
       <div class="nav-links">
-        <router-link to="/" class="nav-link">Queue</router-link>
+        <span v-if="auth.user" class="nav-user">{{ auth.user.email }}</span>
+        <button v-if="auth.user" class="logout-btn" title="Sign out" @click="handleLogout">↩ Sign out</button>
         <button class="theme-btn" :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'" @click="toggleDark">
           {{ isDark ? '☀️' : '🌙' }}
         </button>
@@ -21,6 +22,11 @@
 
 <script setup>
 import { ref, watchEffect } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+
+const auth   = useAuthStore();
+const router = useRouter();
 
 const isDark = ref(localStorage.getItem('theme') === 'dark');
 
@@ -32,6 +38,17 @@ function toggleDark() {
 watchEffect(() => {
   document.documentElement.classList.toggle('dark', isDark.value);
 });
+
+async function handleLogout() {
+  try {
+    await auth.logout();
+  } catch {
+    // session may already be gone — clear local state and redirect anyway
+    auth.user = null;
+  } finally {
+    await router.push('/login');
+  }
+}
 </script>
 
 <style>
@@ -120,6 +137,29 @@ body {
 }
 .nav-link:hover, .nav-link.router-link-active {
   background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+
+.nav-user {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.55);
+  padding: 0 0.25rem;
+}
+
+.logout-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.8);
+  padding: 0.35rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.logout-btn:hover {
+  background: rgba(255,255,255,0.2);
   color: #fff;
 }
 
