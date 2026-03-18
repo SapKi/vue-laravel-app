@@ -6,6 +6,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
+
 const props = defineProps({
   status: { type: String, required: true },
 });
@@ -16,8 +18,8 @@ const map = {
   rejected: { label: 'Rejected', cls: 'badge--rejected' },
 };
 
-const badgeClass = map[props.status]?.cls ?? '';
-const label      = map[props.status]?.label ?? props.status;
+const badgeClass = computed(() => map[props.status]?.cls ?? '');
+const label      = computed(() => map[props.status]?.label ?? props.status);
 </script>
 
 <style scoped>

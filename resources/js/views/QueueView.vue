@@ -73,7 +73,6 @@
         :key="item.id"
         class="item-card"
         :class="{
-          'item-card--high-risk': item.risk_score >= 55,
           'item-card--approved': item.status === 'approved',
           'item-card--rejected': item.status === 'rejected',
         }"
@@ -450,13 +449,6 @@ onMounted(() => store.loadItems());
 }
 .item-card:hover::before { opacity: 1; }
 
-.item-card--high-risk {
-  border-color: #fca5a5;
-}
-.item-card--high-risk::before {
-  background: linear-gradient(180deg, #ef4444, #dc2626);
-  opacity: 1;
-}
 .item-card--approved {
   border-color: #6ee7b7;
 }
