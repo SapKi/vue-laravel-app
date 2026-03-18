@@ -523,14 +523,14 @@ onMounted(() => store.loadItems());
   letter-spacing: 0.02em;
 }
 .suggestion-chip--approve {
-  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  background: #6ee7b7;
   color: #065f46;
-  border: 1px solid #6ee7b7;
+  border: none;
 }
 .suggestion-chip--reject {
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
-  color: #991b1b;
-  border: 1px solid #fca5a5;
+  background: #fca5a5;
+  color: #7f1d1d;
+  border: none;
 }
 
 /* Animations */

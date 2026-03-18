@@ -42,28 +42,28 @@ const label      = map[props.status]?.label ?? props.status;
 }
 
 .badge--pending {
-  background: #fef3c7;
+  background: #fde68a;
   color: #92400e;
-  border: 1px solid #fde68a;
+  border: none;
 }
 .badge--pending .badge-dot {
-  background: #f59e0b;
+  background: #d97706;
   animation: pulse-amber 1.8s infinite;
 }
 
 .badge--approved {
-  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  background: #6ee7b7;
   color: #065f46;
-  border: 1px solid #6ee7b7;
+  border: none;
 }
-.badge--approved .badge-dot { background: #10b981; }
+.badge--approved .badge-dot { background: #059669; }
 
 .badge--rejected {
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
-  color: #991b1b;
-  border: 1px solid #fca5a5;
+  background: #fca5a5;
+  color: #7f1d1d;
+  border: none;
 }
-.badge--rejected .badge-dot { background: #ef4444; }
+.badge--rejected .badge-dot { background: #dc2626; }
 
 @keyframes pulse-amber {
   0%, 100% { opacity: 1; transform: scale(1); }

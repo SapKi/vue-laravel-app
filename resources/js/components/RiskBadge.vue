@@ -118,13 +118,13 @@ function close() {
   flex-shrink: 0;
 }
 
-.risk--low    { background: linear-gradient(135deg,#d1fae5,#a7f3d0); color:#065f46; border:1px solid #6ee7b7; }
-.risk--medium { background: linear-gradient(135deg,#fef3c7,#fde68a); color:#78350f; border:1px solid #fcd34d; }
-.risk--high   { background: linear-gradient(135deg,#fee2e2,#fecaca); color:#991b1b; border:1px solid #fca5a5; }
+.risk--low    { background: #6ee7b7; color: #065f46; border: none; }
+.risk--medium { background: #fde68a; color: #92400e; border: none; }
+.risk--high   { background: #fca5a5; color: #7f1d1d; border: none; }
 
-.risk--low-dot    { background: #10b981; }
-.risk--medium-dot { background: #f59e0b; animation: pulse 1.6s infinite; }
-.risk--high-dot   { background: #ef4444; animation: pulse 1s infinite; }
+.risk--low-dot    { background: #059669; }
+.risk--medium-dot { background: #d97706; animation: pulse 1.6s infinite; }
+.risk--high-dot   { background: #dc2626; animation: pulse 1s infinite; }
 </style>
 
 <!-- Popover styles must be global (not scoped) because it's teleported to body -->
@@ -163,9 +163,9 @@ function close() {
   padding: 2px 8px;
   border-radius: 6px;
 }
-.risk--low.popover-score    { background: #d1fae5; color: #065f46; }
-.risk--medium.popover-score { background: #fef3c7; color: #78350f; }
-.risk--high.popover-score   { background: #fee2e2; color: #991b1b; }
+.risk--low.popover-score    { background: #6ee7b7; color: #065f46; }
+.risk--medium.popover-score { background: #fde68a; color: #92400e; }
+.risk--high.popover-score   { background: #fca5a5; color: #7f1d1d; }
 
 .popover-label { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.6); }
 
