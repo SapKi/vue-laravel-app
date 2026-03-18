@@ -2,16 +2,27 @@
 
 A content moderation review queue built with **Vue 3** (frontend) and **Laravel 12** (backend API).
 
----
+> **The app runs on port 8000.** Open http://localhost:8000 in your browser.
+
+
+To run the app:
+
+
+# Terminal 1
+php artisan serve          # → http://localhost:8000
+
+# Terminal 2
+npm run dev                # → http://localhost:3000
+--- full run instructions with installations below
 
 ## Ports
 
-| Service | Port | URL |
-|---|---|---|
-| Frontend (Vite dev server) | **3000** | http://localhost:3000 |
-| Backend (Laravel) | **8000** | http://localhost:8000 |
+| Service | Port | URL | Purpose |
+|---|---|---|---|
+| **App** (Laravel + Vue) | **8000** | http://localhost:8000 | Open this in your browser |
+| Vite HMR asset server | 3000 | http://localhost:3000 | Internal only — provides hot reload |
 
-The frontend proxies all `/api/*` requests to the backend — no CORS configuration needed in development.
+> **How it works:** Laravel (port 8000) serves the HTML shell and your Vue SPA. Vite (port 3000) runs silently in the background, serving JS/CSS with hot module replacement. You never need to open port 3000 directly.
 
 ---
 
